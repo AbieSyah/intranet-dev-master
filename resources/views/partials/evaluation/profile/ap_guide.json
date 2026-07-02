@@ -1,0 +1,162 @@
+[
+    {
+        "label": "Managerial",
+        "prefix": "ap_managerial",
+        "guide": {
+            "1": "Mengarahkan bawahan untuk efektif dalam bekerja.",
+            "2": "Mendelegasikan tugas kepada bawahan dengan bijak.",
+            "3": "Menciptakan suasana kerja yang kolaboratif.",
+            "4": "Membuat perencanaan yang efisien",
+            "5": "Mampu menyajikan konsep-konsep.",
+            "6": "Mengidentifikasi hambatan dalam pekerjaan.",
+            "7": "Melakukan analisa informasi dalam mencari solusi.",
+            "8": "Memberikan kesempatan bawahan mengambil keputusan.",
+            "9": "Menghasilkan solusi jangka panjang.",
+            "10": "Mempertimbangkan resiko dan keberhasilan dalam implementasi."
+        }
+    },
+    {
+        "label": "Ability To Response / \"HORENSO\"",
+        "prefix": "ap_ability_response",
+        "guide": {
+            "1": "Melaporkan aktivitas proses kerja kepada atasan/rekan kerja.",
+            "2": "Mampu menangkap pesan yang disampaikan lawan bicara.",
+            "3": "Menyampaikan laporan dengan cara-cara yang mudah dimengerti.",
+            "4": "Melakukan konsultasi dengan atasan/rekan kerja.",
+            "5": "Menyimpulkan informasi yang diterimanya.",
+            "6": "Mampu menyampaikan tujuan komunikasi dengan jelas",
+            "7": "Terbuka dalam menyampaikan dan menerima informasi.",
+            "8": "Menyajikan laporan yang komprehensif dengan menyajikan fakta dan analisanya.",
+            "9": "Mampu memprioritaskan informasi sesuai tingkat urgensinya.",
+            "10": "Melakukan \"HORENSO\" secara proaktif."
+        }
+    },
+    {
+        "label": "Leadership",
+        "prefix": "ap_leadership",
+        "guide": {
+            "1": "Tekun dan bersemangat.",
+            "2": "Mampu bersikap tegas.",
+            "3": "Meminta pendapat dari timnya.",
+            "4": "Mampu menjelaskan target dan ekspektasinya.",
+            "5": "Berperilaku sesuai dengan etika.",
+            "6": "Tidak hanya memerintah tetapi mengajari timnya.",
+            "7": "Berintegritas.",
+            "8": "Mampu bertindak secara objektif.",
+            "9": "Menjadi teladan.",
+            "10": "Membuat keputusan dengan dasar yang kuat."
+        }
+    },
+    {
+        "label": "Accuracy",
+        "prefix": "ap_accuracy",
+        "guide": {
+            "1": "Bekerja dengan teliti.",
+            "2": "Memeriksa kembali hasil kerjanya.",
+            "3": "Berorientasi kepada hasil",
+            "4": "Mengarahkan diri/timmnya untuk mencapai akurasi.",
+            "5": "Mencapai target tepat waktu.",
+            "6": "Melakukan evaluasi metode kerja untuk meningkatkan akurasi.",
+            "7": "Menyiapkan langkah antisipasi agar tidak terjadi kesalahan.",
+            "8": "Melakukan pekerjaan tanpa kesalahan.",
+            "9": "Mampu memberikan hasil sesuai standar.",
+            "10": "Melakukan analisa sebelum memutuskan."
+        }
+    },
+    {
+        "label": "Capability",
+        "prefix": "ap_capability",
+        "guide": {
+            "1": "Mampu menyelesaikan tugas dengan tuntas.",
+            "2": "Menunjukkan usaha mencapai standar kerja.",
+            "3": "Mengendalikan diri dalam menghadapi tekanan.",
+            "4": "Menunjukkan usaha untuk meningkatkan kemampuannya.",
+            "5": "Menunjukkan kemauan untuk melakukan perubahan.",
+            "6": "Menunjukkan kesiapan untuk melakukan perubahan.",
+            "7": "Menunjukkan usaha meningkatkan hasil kerja.",
+            "8": "Dapat diandalkan.",
+            "9": "Bereaksi positif menghadapi tantangan.",
+            "10": "Menerima tantangan untuk meningkatkan kemampuannya."
+        }
+    },
+    {
+        "label": "Initiative",
+        "prefix": "ap_initiative",
+        "guide": {
+            "1": "Mampu menunjukkan ide-ide.",
+            "2": "Aktif memberikan pendapat.",
+            "3": "Melakukan usaha yang lebih.",
+            "4": "Menunjukkan upaya menyelesaikan masalah sebelum diminta.",
+            "5": "Menyelesaikan pekerjaan melebihi ekspektasi.",
+            "6": "Menyampaikan alternatif-alternatif.",
+            "7": "Berupaya mengambil peran dalam aktivitas tim.",
+            "8": "Aktif memberikan saran.",
+            "9": "Melakukan insiatif sesuai dengan tujuan kelompok.",
+            "10": "Membimbing timnya untuk mampu berinisiatif."
+        }
+    },
+    {
+        "label": "Kaizen",
+        "prefix": "ap_kaizen",
+        "guide": {
+            "1": "Memperhatikan hal-hal terkait pekerjaannya.",
+            "2": "Mengenali masalah.",
+            "3": "Mencapai target Kaizen.",
+            "4": "Mencari alternatif solusi.",
+            "5": "Mengubah proses kerja menjadi lebih baik.",
+            "6": "Konsisten melakukan inovasi.",
+            "7": "Meningkatkan hasil kerjanya.",
+            "8": "Melibatkan timnya dalam melakukan inovasi.",
+            "9": "Membimbing timnya untuk mampu mencari solusi.",
+            "10": "Membimbing timnya untuk mampu berinovasi."
+        }
+    },
+    {
+        "label": "Responsibility",
+        "prefix": "ap_responsibility",
+        "guide": {
+            "1": "Memberikan perhatian kepada pekerjaan.",
+            "2": "Berani meminta maaf.",
+            "3": "Melakukan yang telah menjadi komitmen.",
+            "4": "Tidak mengalihkan kesalahannya.",
+            "5": "Mampu menjelaskan dasar tindakannya.",
+            "6": "Menjadi bagian dari kesalahan yang dilakukan timmnya.",
+            "7": "Mampu menentukan pilihan dari beberapa alternatif.",
+            "8": "Menerima keputusan yang ditetapkan.",
+            "9": "Mampu mengelola resiko.",
+            "10": "Membimbing timnya menjadi pribadi yang bertanggung jawab."
+        }
+    },
+    {
+        "label": "Discipline",
+        "prefix": "ap_discipline",
+        "guide": {
+            "1": "Mematuhi aturan yang berlaku.",
+            "2": "Tidak menunda pekerjaan.",
+            "3": "Membuat jadwal aktivitas kerja.",
+            "4": "Melaksanakan aktivitas sesuai jadwal.",
+            "5": "Memonitor proses kerja.",
+            "6": "Menyelesaikan pekerjaan tepat waktu.",
+            "7": "Menggunakan langkah-langkah yang efisien.",
+            "8": "Memanfaatkan waktu kerja dengan baik",
+            "9": "Menunjukkan sikap konsisten.",
+            "10": "Membimbing timnya berperilaku disiplin."
+        }
+    },
+    {
+        "label": "Cooperation",
+        "prefix": "ap_cooperation",
+        "guide": {
+            "1": "Membantu pekerjaan tim.",
+            "2": "Memberikan kontribusi nyata.",
+            "3": "Menunjukkan sikap mendukung perubahan.",
+            "4": "Mampu menyesuaikan diri dengan perubahan.",
+            "5": "Berbagi informasi.",
+            "6": "Terbuka menerima kritik dan saran.",
+            "7": "Mengedepankan kepentingan timnya.",
+            "8": "Mengidentifikasi kelemahan dan kekuatan timnya.",
+            "9": "Meningkatkan kerjasama tim.",
+            "10": "Berkolaborasi dengan departemen/bagian lain."
+        }
+    }
+]
