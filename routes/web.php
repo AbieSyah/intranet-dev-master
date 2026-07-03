@@ -449,6 +449,15 @@ Route::group(['middleware' => 'auth'], function () {
         });
     });
 
+    Route::prefix('e-sign')
+        ->controller(\App\Http\Controllers\ESign\ESignController::class)
+        ->group(function () {
+            Route::get('/dashboard', 'dashboard')->name('e-sign.dashboard');
+            Route::get('/daftar-surat', 'daftarSurat')->name('e-sign.daftar-surat');
+            Route::get('/jenis-surat', 'jenisSurat')->name('e-sign.jenis-surat');
+            Route::get('/template/{jenis}', 'template')->name('e-sign.template');
+        });
+
     //administrator
     Route::prefix('/administrator')
         ->middleware('can:administrator.menu')

@@ -395,7 +395,31 @@
                             </ul>
                         </div>
                     </li>
-                    @endcan   
+                    @endcan
+                    <li class="nav-item {{ request()->is('e-sign*') ? 'active menu-open' : '' }}">
+                        <a class="nav-link menu-link {{ request()->is('e-sign*') ? 'active' : '' }}" href="#sidebarESign" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarESign">
+                            <i class="ri-file-text-line"></i> <span data-key="t-e-sign">E-Sign Management</span>
+                        </a>
+                        <div class="collapse menu-dropdown {{ request()->is('e-sign*') ? 'in show' : '' }}" id="sidebarESign">
+                            <ul class="nav nav-sm flex-column">
+                                <li class="nav-item">
+                                    <a href="{{ route('e-sign.dashboard') }}" class="nav-link {{ request()->is('e-sign/dashboard') ? 'active' : '' }}" data-key="t-e-sign-dashboard">
+                                        <i class="ri-dashboard-line me-1"></i> Dashboard
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="{{ route('e-sign.daftar-surat') }}" class="nav-link {{ request()->is('e-sign/daftar-surat') ? 'active' : '' }}" data-key="t-e-sign-daftar-surat">
+                                        <i class="ri-file-list-3-line me-1"></i> Daftar Surat
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="{{ route('e-sign.jenis-surat') }}" class="nav-link {{ request()->is('e-sign/jenis-surat') ? 'active' : '' }}" data-key="t-e-sign-jenis-surat">
+                                        <i class="ri-grid-line me-1"></i> Jenis Surat
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </li>                    
                     @canany(['itsm.it-asset.read', 'itsm.asset-type.read', 'itsm.asset-disposal.read', 'itsm.service-desk.read', 'itsm.knowledge-base.read', 'itsm.change-management.read'])                        
                         <li class="nav-item {{ 
                             request()->is('administrator/it-asset*') || 

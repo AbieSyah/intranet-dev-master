@@ -127,6 +127,7 @@
     <!-- ========== App Menu ========== -->
     <!-- Left Sidebar End -->
     <!-- Vertical Overlay-->
+    <!-- Vertical Overlay-->
 
     <!-- ============================================================== -->
     <!-- Start right Content here -->
