@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -14,18 +15,34 @@ class ESign extends Model
 
     protected $fillable = [
         'employee_id',
+        'employee1_signee_id',
+        'employee2_signee_id',
+        'employee3_signee_id',
+        'letter_type_id',
+        'template_id',
+        'nomor_surat',
         'document_name',
+        'title',
+        'content',
         'document_type',
+        'jenis_surat_slug',
         'description',
         'document_path',
         'file_name',
         'file_size',
+        'pdf_path',
+        'signed_pdf_path',
         'status',
+        'created_by',
         'upload_date',
+        'tanggal_mulai',
+        'tanggal_akhir',
     ];
 
     protected $dates = [
         'upload_date',
+        'tanggal_mulai',
+        'tanggal_akhir',
         'created_at',
         'updated_at',
         'deleted_at',
@@ -34,6 +51,8 @@ class ESign extends Model
     protected $casts = [
         'file_size' => 'integer',
         'upload_date' => 'datetime',
+        'tanggal_mulai' => 'date',
+        'tanggal_akhir' => 'date',
     ];
 
     // ========== RELATIONSHIPS ==========
@@ -46,12 +65,38 @@ class ESign extends Model
         return $this->belongsTo(Employee::class, 'employee_id');
     }
 
+    /**
+     * Get the letter type associated with this document.
+     */
+    public function letterType()
+    {
+        return $this->belongsTo(LetterType::class, 'letter_type_id');
+    }
+
+    /**
+     * Get the template used when this draft was created.
+     */
+    public function template()
+    {
+        return $this->belongsTo(ESignTemplate::class, 'template_id');
+    }
+
+    /**
+     * Get the user who created this draft.
+     */
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
     // ========== CONSTANTS ==========
 
     const STATUS_DRAFT = 'draft';
-    const STATUS_PENDING = 'pending';
-    const STATUS_APPROVED = 'approved';
-    const STATUS_REJECTED = 'rejected';
+    const STATUS_SIGN_1 = 'sign_1';
+    const STATUS_SIGN_2 = 'sign_2';
+    const STATUS_SIGN_3 = 'sign_3';
+    const STATUS_COMPLETED = 'completed';
+    const STATUS_REJECTED_EMPLOYEE = 'rejected_employee';
 
     const DOCUMENT_TYPE_CONTRACT = 'contract';
     const DOCUMENT_TYPE_APPROVAL = 'approval';
@@ -62,9 +107,11 @@ class ESign extends Model
 
     public static $statuses = [
         self::STATUS_DRAFT => 'Draft',
-        self::STATUS_PENDING => 'Menunggu Persetujuan',
-        self::STATUS_APPROVED => 'Disetujui',
-        self::STATUS_REJECTED => 'Ditolak',
+        self::STATUS_SIGN_1 => 'Menunggu Sign 1',
+        self::STATUS_SIGN_2 => 'Menunggu Sign 2',
+        self::STATUS_SIGN_3 => 'Menunggu Sign 3',
+        self::STATUS_COMPLETED => 'Completed',
+        self::STATUS_REJECTED_EMPLOYEE => 'Ditolak',
     ];
 
     public static $documentTypes = [
@@ -91,9 +138,11 @@ class ESign extends Model
     {
         $colors = [
             self::STATUS_DRAFT => 'warning',
-            self::STATUS_PENDING => 'info',
-            self::STATUS_APPROVED => 'success',
-            self::STATUS_REJECTED => 'danger',
+            self::STATUS_SIGN_1 => 'info',
+            self::STATUS_SIGN_2 => 'info',
+            self::STATUS_SIGN_3 => 'info',
+            self::STATUS_COMPLETED => 'success',
+            self::STATUS_REJECTED_EMPLOYEE => 'danger',
         ];
 
         $color = $colors[$this->status] ?? 'secondary';
@@ -125,6 +174,76 @@ class ESign extends Model
         return round($bytes, 2) . ' ' . $units[$i];
     }
 
+    /**
+     * Get jenis surat label (display name from slug).
+     * Map ini harus sinkron dengan ESignDummyData::getLetterTypes()
+     */
+    public static function getJenisSuratLabels(): array
+    {
+        return [
+            'pkwt' => 'PKWT',
+            'promosi' => 'Promosi',
+            'mutasi' => 'Mutasi',
+            'demosi' => 'Demosi',
+            'perpanjangan-pkwt' => 'Perpanjangan PKWT',
+            'pengangkatan' => 'Pengangkatan Karyawan Tetap',
+            'surat-peringatan' => 'Surat Peringatan',
+        ];
+    }
+
+    /**
+     * Get jenis surat display name from slug
+     */
+    public function getJenisSuratLabelAttribute()
+    {
+        $labels = self::getJenisSuratLabels();
+        return $labels[$this->jenis_surat_slug] ?? ucfirst($this->jenis_surat_slug);
+    }
+
+    /**
+     * Get formatted tanggal_mulai (e.g. "01 Jul 2026")
+     */
+    public function getTanggalMulaiFormattedAttribute()
+    {
+        if (!$this->tanggal_mulai) return '-';
+        return Carbon::parse($this->tanggal_mulai)->format('d M Y');
+    }
+
+    /**
+     * Get formatted tanggal_akhir (e.g. "01 Jul 2026")
+     */
+    public function getTanggalAkhirFormattedAttribute()
+    {
+        if (!$this->tanggal_akhir) return '-';
+        return Carbon::parse($this->tanggal_akhir)->format('d M Y');
+    }
+
+    /**
+     * Get prefix nomor surat berdasarkan jenis_surat_slug.
+     * Sinkron dengan prefix di ESignDummyData.
+     */
+    public static function getNomorSuratPrefixes(): array
+    {
+        return [
+            'pkwt' => 'PKWT',
+            'promosi' => 'PROM',
+            'mutasi' => 'MUT',
+            'demosi' => 'DEM',
+            'perpanjangan-pkwt' => 'PPKWT',
+            'pengangkatan' => 'ANGKAT',
+            'surat-peringatan' => 'SP',
+        ];
+    }
+
+    /**
+     * Get the prefix for this document's letter type
+     */
+    public function getNomorSuratPrefixAttribute()
+    {
+        $prefixes = self::getNomorSuratPrefixes();
+        return $prefixes[$this->jenis_surat_slug] ?? strtoupper($this->jenis_surat_slug);
+    }
+
     // ========== QUERY SCOPES ==========
 
     /**
@@ -144,19 +263,27 @@ class ESign extends Model
     }
 
     /**
-     * Scope to get pending documents
+     * Scope to get documents waiting for sign (sign_1, sign_2, sign_3)
      */
-    public function scopePending($query)
+    public function scopeWaitingSign($query)
     {
-        return $query->where('status', self::STATUS_PENDING);
+        return $query->whereIn('status', [self::STATUS_SIGN_1, self::STATUS_SIGN_2, self::STATUS_SIGN_3]);
     }
 
     /**
-     * Scope to get approved documents
+     * Scope to get completed documents
      */
-    public function scopeApproved($query)
+    public function scopeCompleted($query)
     {
-        return $query->where('status', self::STATUS_APPROVED);
+        return $query->where('status', self::STATUS_COMPLETED);
+    }
+
+    /**
+     * Scope to get rejected documents
+     */
+    public function scopeRejected($query)
+    {
+        return $query->where('status', self::STATUS_REJECTED_EMPLOYEE);
     }
 
     /**
@@ -165,6 +292,14 @@ class ESign extends Model
     public function scopeByType($query, $documentType)
     {
         return $query->where('document_type', $documentType);
+    }
+
+    /**
+     * Scope to get by jenis surat slug
+     */
+    public function scopeByJenisSurat($query, $slug)
+    {
+        return $query->where('jenis_surat_slug', $slug);
     }
 
     // ========== HELPER METHODS ==========
@@ -178,27 +313,112 @@ class ESign extends Model
     }
 
     /**
-     * Check if document is in pending status
+     * Check if document is in sign_1 status
      */
-    public function isPending()
+    public function isSign1()
     {
-        return $this->status === self::STATUS_PENDING;
+        return $this->status === self::STATUS_SIGN_1;
     }
 
     /**
-     * Check if document is approved
+     * Check if document is in sign_2 status
      */
-    public function isApproved()
+    public function isSign2()
     {
-        return $this->status === self::STATUS_APPROVED;
+        return $this->status === self::STATUS_SIGN_2;
     }
 
     /**
-     * Check if document is rejected
+     * Check if document is in sign_3 status
      */
-    public function isRejected()
+    public function isSign3()
     {
-        return $this->status === self::STATUS_REJECTED;
+        return $this->status === self::STATUS_SIGN_3;
+    }
+
+    /**
+     * Check if document is completed
+     */
+    public function isCompleted()
+    {
+        return $this->status === self::STATUS_COMPLETED;
+    }
+
+    /**
+     * Check if document is rejected by employee
+     */
+    public function isRejectedByEmployee()
+    {
+        return $this->status === self::STATUS_REJECTED_EMPLOYEE;
+    }
+
+    /**
+     * Get current sign level (1, 2, 3) based on status.
+     * Returns 0 if not in sign_1/2/3.
+     */
+    public function getCurrentSignLevel(): int
+    {
+        return match($this->status) {
+            self::STATUS_SIGN_1 => 1,
+            self::STATUS_SIGN_2 => 2,
+            self::STATUS_SIGN_3 => 3,
+            default => 0,
+        };
+    }
+
+    /**
+     * Get employee ID who should sign at the current level.
+     */
+    public function getCurrentSigneeId(): ?int
+    {
+        return match($this->status) {
+            self::STATUS_SIGN_1 => $this->employee1_signee_id,
+            self::STATUS_SIGN_2 => $this->employee2_signee_id,
+            self::STATUS_SIGN_3 => $this->employee3_signee_id,
+            default => null,
+        };
+    }
+
+    /**
+     * Check if document can be responded to by the recipient employee.
+     * Only the employee whose turn it is (current sign level) can respond.
+     */
+    public function canBeResponded(int $employeeId): bool
+    {
+        $currentSigneeId = $this->getCurrentSigneeId();
+        return $currentSigneeId !== null && $currentSigneeId === $employeeId;
+    }
+
+    /**
+     * Check if document is waiting for any employee sign
+     */
+    public function isWaitingSign()
+    {
+        return in_array($this->status, [self::STATUS_SIGN_1, self::STATUS_SIGN_2, self::STATUS_SIGN_3]);
+    }
+
+    /**
+     * Check if document can be sent to employee (only draft)
+     */
+    public function canBeSent()
+    {
+        return $this->isDraft();
+    }
+
+    /**
+     * Get the status badge color for views that don't use the accessor
+     */
+    public static function getStatusColor(string $status): string
+    {
+        $colors = [
+            self::STATUS_DRAFT => 'warning',
+            self::STATUS_SIGN_1 => 'info',
+            self::STATUS_SIGN_2 => 'info',
+            self::STATUS_SIGN_3 => 'info',
+            self::STATUS_COMPLETED => 'success',
+            self::STATUS_REJECTED_EMPLOYEE => 'danger',
+        ];
+        return $colors[$status] ?? 'secondary';
     }
 
     /**

@@ -9,6 +9,17 @@
         div.dataTables_wrapper { width: 100%; }
         .table-esign th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
         .table-esign td { font-size: 13px; vertical-align: middle; }
+        .expand-row { display: none; background-color: #f8f9fa !important; }
+        .expand-row td { padding: 16px 24px !important; }
+        .expand-row.show { display: table-row; }
+        .btn-expand { cursor: pointer; transition: transform 0.2s; }
+        .btn-expand.expanded { transform: rotate(90deg); }
+        .detail-grid { display: grid; grid-template-columns: 140px 1fr; gap: 6px 16px; font-size: 13px; }
+        .detail-label { color: #6c757d; font-weight: 500; }
+        .detail-value { color: #212529; }
+        .signee-list { list-style: none; padding: 0; margin: 0; }
+        .signee-list li { padding: 2px 0; }
+        .signee-list li::before { content: "•"; color: #0ab39c; font-weight: bold; display: inline-block; width: 14px; }
     </style>
 @endsection
 
@@ -51,26 +62,51 @@
 <div class="row">
     <div class="col-12">
         <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between">
+            <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
                 <div>
                     <h5 class="card-title mb-0">Semua Dokumen</h5>
-                    <small class="text-muted">Total {{ count($documents) }} dokumen</small>
+                    <small class="text-muted">Total {{ $documents->total() }} dokumen</small>
                 </div>
-                <a href="{{ route('e-sign.jenis-surat') }}" class="btn btn-sm btn-primary">
-                    <i class="ri-add-line me-1"></i>Buat Surat Baru
-                </a>
+                <div class="d-flex align-items-center gap-2">
+                    <form method="GET" action="{{ route('e-sign.daftar-surat') }}" class="d-flex align-items-center gap-2">
+                        <select name="jenis_surat" class="form-select form-select-sm" style="min-width:140px;">
+                            <option value=""> Semua Jenis Surat </option>
+                            @foreach($letterTypes as $lt)
+                            <option value="{{ $lt->slug }}" {{ ($currentJenisSurat ?? '') == $lt->slug ? 'selected' : '' }}>
+                                {{ $lt->name }}
+                            </option>
+                            @endforeach
+                        </select>
+                        <div class="input-group input-group-sm" style="min-width:200px;">
+                            <span class="input-group-text bg-light border-end-0">
+                                <i class="ri-search-line text-muted"></i>
+                            </span>
+                            <input type="text" name="search" class="form-control" placeholder="Cari nomor, NIK, nama..." value="{{ $search ?? '' }}">
+                            <button class="btn btn-primary" type="submit">
+                                <i class="ri-filter-2-line"></i>
+                            </button>
+                            @if($search || $currentJenisSurat)
+                            <a href="{{ route('e-sign.daftar-surat') }}" class="btn btn-outline-secondary">
+                                <i class="ri-close-line"></i>
+                            </a>
+                            @endif
+                        </div>
+                    </form>
+                    <a href="{{ route('e-sign.create-select') }}" class="btn btn-primary">
+                        <i class="ri-add-line me-1"></i> Buat Surat Baru
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 <table class="table table-striped dt-responsive nowrap w-100 table-esign" id="tableDaftarSurat">
                     <thead>
                         <tr>
+                            <th style="width:40px;"></th>
                             <th>No</th>
                             <th>Nomor Surat</th>
                             <th>Jenis Surat</th>
-                            <th>NIK</th>
-                            <th>Nama Employee</th>
-                            <th>Departemen</th>
-                            <th>Tanggal Dibuat</th>
+                            <th>Template</th>
+                            <th>Tanggal</th>
                             <th>Status</th>
                             <th>Action</th>
                         </tr>
@@ -88,32 +124,72 @@
                                 'Surat Peringatan' => 'surat-peringatan',
                             ];
                             $slug = $slugMap[$doc['jenis_surat']] ?? 'pkwt';
-                            $badge = match($doc['status']) {
-                                'Signed' => 'success',
-                                'Waiting Signature' => 'info',
-                                'Draft' => 'warning',
-                                'Rejected' => 'danger',
-                                default => 'secondary'
-                            };
+                            $badge = 'secondary';
+                            if ($doc['status'] === 'Completed') $badge = 'success';
+                            elseif (in_array($doc['status'], ['Sign 1', 'Sign 2', 'Sign 3'])) $badge = 'info';
+                            elseif ($doc['status'] === 'Draft') $badge = 'warning';
+                            elseif ($doc['status'] === 'Rejected') $badge = 'danger';
+                            $rowId = 'detail-' . $doc['id'];
                         @endphp
-                        <tr>
+                        <tr class="main-row" data-target="{{ $rowId }}">
+                            <td class="text-center">
+                                <i class="ri-arrow-right-s-line btn-expand fs-18" data-target="{{ $rowId }}"></i>
+                            </td>
                             <td>{{ $i + 1 }}</td>
-                            <td><span class="fw-medium">{{ $doc['nomor_surat'] }}</span></td>
+                            <td><span class="fw-medium">{{ $doc['nomor_surat'] ?? '—' }}</span></td>
                             <td>{{ $doc['jenis_surat'] }}</td>
-                            <td>{{ $doc['nik'] }}</td>
-                            <td>{{ $doc['nama'] }}</td>
-                            <td>{{ $doc['departemen'] }}</td>
+                            <td>{{ $doc['template_name'] }}</td>
                             <td>{{ $doc['tanggal'] }}</td>
                             <td><span class="badge bg-{{ $badge }}">{{ $doc['status'] }}</span></td>
                             <td>
-                                <a href="{{ route('e-sign.template', $slug) }}" class="btn btn-sm btn-soft-primary">
-                                    <i class="ri-eye-line me-1"></i>Detail
+                                <a href="{{ route('e-sign.preview', $doc['id']) }}" class="btn btn-sm btn-soft-primary">
+                                    <i class="ri-eye-line me-1"></i>Preview
                                 </a>
+                            </td>
+                        </tr>
+                        <tr class="expand-row" id="{{ $rowId }}">
+                            <td colspan="8">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="fw-semibold mb-3"><i class="ri-file-info-line me-1"></i> Informasi Employee</h6>
+                                        <div class="detail-grid">
+                                            <span class="detail-label">NIK</span>
+                                            <span class="detail-value">{{ $doc['nik'] }}</span>
+                                            <span class="detail-label">Nama</span>
+                                            <span class="detail-value">{{ $doc['nama'] }}</span>
+                                            <span class="detail-label">Departemen</span>
+                                            <span class="detail-value">{{ $doc['departemen'] }}</span>
+                                            <span class="detail-label">Jabatan</span>
+                                            <span class="detail-value">{{ $doc['jabatan'] }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="fw-semibold mb-3"><i class="ri-signature-line me-1"></i> Signees</h6>
+                                        <ul class="signee-list">
+                                            <li><strong>Sign 1:</strong> {{ $doc['signee1_name'] }}</li>
+                                            <li><strong>Sign 2:</strong> {{ $doc['signee2_name'] }}</li>
+                                            <li><strong>Sign 3:</strong> {{ $doc['signee3_name'] }}</li>
+                                        </ul>
+                                        <div class="mt-3">
+                                            @if($doc['status_raw'] === 'draft')
+                                            <a href="{{ route('e-sign.edit', $doc['id']) }}" class="btn btn-sm btn-warning">
+                                                <i class="ri-pencil-line me-1"></i> Edit Surat
+                                            </a>
+                                            @endif
+                                            <a href="{{ route('e-sign.pdf', $doc['id']) }}" class="btn btn-sm btn-success">
+                                                <i class="ri-download-2-line me-1"></i> Download PDF
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         @endforeach
                     </tbody>
                 </table>
+                <div class="mt-3">
+                    {{ $documents->links() }}
+                </div>
             </div>
         </div>
     </div>
@@ -121,20 +197,24 @@
 @endsection
 
 @section('javascript')
-<script src="{{ url('') }}/assets/libs/Datatables/DataTables-1.13.1/js/jquery.dataTables.min.js"></script>
-<script src="{{ url('') }}/assets/libs/Datatables/DataTables-1.13.1/js/dataTables.bootstrap5.min.js"></script>
-<script src="{{ url('') }}/assets/libs/Datatables/Buttons-2.3.3/js/dataTables.buttons.min.js"></script>
-<script src="{{ url('') }}/assets/libs/Datatables/Responsive-2.4.0/js/dataTables.responsive.min.js"></script>
-<script src="{{ url('') }}/assets/libs/Datatables/Responsive-2.4.0/js/responsive.bootstrap.min.js"></script>
 <script>
     $(document).ready(function() {
-        $('#tableDaftarSurat').DataTable({
-            responsive: true,
-            pageLength: 25,
-            order: [[0, 'asc']],
-            columnDefs: [
-                { targets: 0, width: '50px' },
-            ],
+        // Expand/collapse on arrow click
+        $(document).on('click', '.btn-expand', function(e) {
+            e.stopPropagation();
+            var targetId = $(this).data('target');
+            var $target = $('#' + targetId);
+            var $icon = $(this);
+
+            $target.toggleClass('show');
+            $icon.toggleClass('expanded');
+        });
+
+        // Expand/collapse on row click (except action column)
+        $(document).on('click', '.main-row td', function(e) {
+            if ($(e.target).closest('a, button, .btn-expand').length) return;
+            var $icon = $(this).closest('tr').find('.btn-expand');
+            $icon.trigger('click');
         });
     });
 </script>

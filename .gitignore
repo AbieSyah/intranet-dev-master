@@ -28,6 +28,7 @@ public/vendor/livewire/
 /storage/framework/sessions/*
 /storage/framework/views/*
 /storage/logs/*.log
+/storage/fonts/*.afm.json
 /storage/app/public/storage
 .DS_Store
 Thumbs.db

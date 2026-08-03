@@ -40,6 +40,7 @@ use Auth;
 use PDF;
 use Response;
 use Exception;
+use Illuminate\Support\Facades\Gate;
 use Yajra\DataTables\Facades\DataTables;
 use App\Models\Security\Guest;
 
@@ -62,11 +63,12 @@ class HomeController extends Controller
      */
     public function index()
     {
+        /** @var \App\Models\User $user */
         $user = auth()->user();
         $date_now  = 'Y-m-d';
         $date_last = date('Y-m-d', strtotime('-1 year'));        
 
-        if (Auth::user()->can('emp.menu')) {
+        if ($user->can('emp.menu')) {
             if(empty($user->last_update_password)){
                 return view('indexpassword');
             }else{
@@ -99,7 +101,12 @@ class HomeController extends Controller
                         }
                     }else{
                         $data_all = array();
-                    }                    
+                    }
+                    // Akun super user / admin tetap tampilkan sidebar kiri di halaman Home
+                    $isSuperUser = $user->hasRole(['super_admin', 'Super User']) || Gate::allows('hrd.menu');
+                    if ($isSuperUser) {
+                        return view('home', compact('user','news_event','data_all','date_now'));
+                    }
                     return view('emphome', compact('user','news_event','data_all','date_now'));
                 }else{
                     return view('indexpassword');

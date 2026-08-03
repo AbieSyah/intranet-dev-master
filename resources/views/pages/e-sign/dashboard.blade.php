@@ -97,7 +97,7 @@
             </div>
         </div>
     </a>
-    <a href="{{ route('e-sign.daftar-surat', ['status' => 'Waiting Signature']) }}" class="col-xl-2 col-lg-4 col-md-6 e-sign-stat-card text-decoration-none">
+    <a href="{{ route('e-sign.daftar-surat', ['status' => 'Sign 1']) }}" class="col-xl-2 col-lg-4 col-md-6 e-sign-stat-card text-decoration-none">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex align-items-center gap-3">
@@ -106,13 +106,13 @@
                     </div>
                     <div>
                         <div class="stat-value text-info">{{ $counts['waiting'] }}</div>
-                        <div class="stat-label text-muted">Waiting Signature</div>
+                        <div class="stat-label text-muted">Menunggu Sign</div>
                     </div>
                 </div>
             </div>
         </div>
     </a>
-    <a href="{{ route('e-sign.daftar-surat', ['status' => 'Signed']) }}" class="col-xl-2 col-lg-4 col-md-6 e-sign-stat-card text-decoration-none">
+    <a href="{{ route('e-sign.daftar-surat', ['status' => 'Completed']) }}" class="col-xl-2 col-lg-4 col-md-6 e-sign-stat-card text-decoration-none">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex align-items-center gap-3">
@@ -121,7 +121,7 @@
                     </div>
                     <div>
                         <div class="stat-value text-success">{{ $counts['signed'] }}</div>
-                        <div class="stat-label text-muted">Signed</div>
+                        <div class="stat-label text-muted">Completed</div>
                     </div>
                 </div>
             </div>
@@ -165,7 +165,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach(array_slice(App\Services\ESignDummyData::getDocuments(), 0, 10) as $i => $doc)
+                            @foreach($recentDocuments as $i => $doc)
                             <tr>
                                 <td>{{ $i + 1 }}</td>
                                 <td><span class="fw-medium">{{ $doc['nomor_surat'] }}</span></td>
@@ -173,13 +173,11 @@
                                 <td>{{ $doc['nama'] }}</td>
                                 <td>
                                     @php
-                                        $badge = match($doc['status']) {
-                                            'Signed' => 'success',
-                                            'Waiting Signature' => 'info',
-                                            'Draft' => 'warning',
-                                            'Rejected' => 'danger',
-                                            default => 'secondary'
-                                        };
+                                        $badge = 'secondary';
+                                        if ($doc['status'] === 'Completed' || $doc['status'] === 'Signed') $badge = 'success';
+                                        elseif (in_array($doc['status'], ['Sign 1', 'Sign 2', 'Sign 3', 'Waiting Signature'])) $badge = 'info';
+                                        elseif ($doc['status'] === 'Draft') $badge = 'warning';
+                                        elseif ($doc['status'] === 'Rejected') $badge = 'danger';
                                     @endphp
                                     <span class="badge bg-{{ $badge }}">{{ $doc['status'] }}</span>
                                 </td>

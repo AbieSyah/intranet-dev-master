@@ -449,13 +449,76 @@ Route::group(['middleware' => 'auth'], function () {
         });
     });
 
+    // Letter Types (Jenis Surat) — includes full template management
+    Route::prefix('e-sign/jenis-surat')
+        ->controller(\App\Http\Controllers\ESign\LetterTypeController::class)
+        ->group(function () {
+            // Letter Type CRUD
+            Route::get('/', 'index')->name('e-sign.jenis-surat');
+            Route::get('/create', 'create')->name('e-sign.jenis-surat.create');
+            Route::post('/', 'store')->name('e-sign.jenis-surat.store');
+
+            // Template Management (under letter type) — before wildcard {id} routes
+            Route::post('/templates', 'storeTemplate')->name('e-sign.jenis-surat.template.store');
+            Route::put('/templates/{id}', 'updateTemplate')->name('e-sign.jenis-surat.template.update');
+            Route::delete('/templates/{id}', 'destroyTemplate')->name('e-sign.jenis-surat.template.destroy');
+            Route::post('/templates/{id}/set-active', 'setActiveTemplate')->name('e-sign.jenis-surat.template.set-active');
+            Route::get('/preview-template/{templateId}', 'previewTemplate')->name('e-sign.jenis-surat.preview-template');
+
+            // Detail/Show page
+            Route::get('/{id}', 'show')->name('e-sign.jenis-surat.show');
+
+            Route::get('/{id}/edit', 'edit')->name('e-sign.jenis-surat.edit');
+            Route::put('/{id}', 'update')->name('e-sign.jenis-surat.update');
+            Route::delete('/{id}', 'destroy')->name('e-sign.jenis-surat.destroy');
+        });
+
+    // Template Surat — Template management (before wildcard e-sign routes)
+    Route::prefix('e-sign/templates')
+        ->controller(\App\Http\Controllers\ESign\TemplateController::class)
+        ->group(function () {
+            Route::get('/', 'index')->name('e-sign.templates');
+            Route::get('/create', 'create')->name('e-sign.templates.create');
+            Route::post('/', 'store')->name('e-sign.templates.store');
+            Route::get('/{id}/edit', 'edit')->name('e-sign.templates.edit');
+            Route::put('/{id}', 'update')->name('e-sign.templates.update');
+            Route::delete('/{id}', 'destroy')->name('e-sign.templates.destroy');
+            Route::post('/{id}/set-active', 'setActive')->name('e-sign.templates.set-active');
+            Route::get('/{id}/preview', 'preview')->name('e-sign.templates.preview');
+        });
+
     Route::prefix('e-sign')
         ->controller(\App\Http\Controllers\ESign\ESignController::class)
         ->group(function () {
             Route::get('/dashboard', 'dashboard')->name('e-sign.dashboard');
             Route::get('/daftar-surat', 'daftarSurat')->name('e-sign.daftar-surat');
-            Route::get('/jenis-surat', 'jenisSurat')->name('e-sign.jenis-surat');
-            Route::get('/template/{jenis}', 'template')->name('e-sign.template');
+
+            // Create Select (pilih jenis surat & template)
+            Route::get('/create', 'createSelect')->name('e-sign.create-select');
+            // CRUD
+            Route::get('/create/{slug}', 'create')->name('e-sign.create');
+            Route::post('/', 'store')->name('e-sign.store');
+            Route::get('/{esign}/edit', 'edit')->name('e-sign.edit');
+            Route::put('/{esign}', 'update')->name('e-sign.update');
+
+            // Send to Employee
+            Route::post('/{esign}/send', 'send')->name('e-sign.send');
+
+            // Delete
+            Route::delete('/{esign}', 'destroy')->name('e-sign.destroy');
+
+            // Preview & PDF
+            Route::get('/preview/{id}', 'preview')->name('e-sign.preview');
+            Route::get('/pdf/{esign}', 'generatePdf')->name('e-sign.pdf');
+        });
+
+    // Employee Profile E-Sign
+    Route::prefix('mye-sign')
+        ->controller(\App\Http\Controllers\ESign\ESignController::class)
+        ->group(function () {
+            Route::get('/index', 'profileIndex')->name('e-sign.profile-index');
+            Route::put('/{esign}/approve', 'approve')->name('e-sign.approve');
+            Route::put('/{esign}/reject', 'reject')->name('e-sign.reject');
         });
 
     //administrator
