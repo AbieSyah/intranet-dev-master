@@ -145,7 +145,7 @@
 
 {{-- Preview Template Modal --}}
 <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="previewModalLabel">
@@ -153,7 +153,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" style="background:#e8eaed;padding:2rem;">
+            <div class="modal-body" style="background:#e8eaed;padding:2rem;overflow-y:auto;max-height:calc(100vh - 10rem);">
                 <div class="preview-a4-wrapper">
                     <div class="preview-a4-page" id="previewModalBody">
                         <div class="text-center text-muted py-5">
@@ -179,13 +179,33 @@
        ============================================================ */
     .preview-a4-wrapper {
         display: flex;
-        justify-content: center;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+    }
+    /* Pemisah antar kertas (page break) */
+    .preview-page-break {
+        width: 70%;
+        max-width: 420px;
+        margin: 4rem auto 4.5rem auto;
+        border-top: 2px dashed #cbd5e1;
+        flex-shrink: 0;
+    }
+    /* Nomor halaman di pojok kanan bawah tiap kertas */
+    .preview-page-number {
+        position: absolute;
+        bottom: 0.35cm;
+        right: 1cm;
+        font-size: 10pt;
+        font-weight: 600;
+        color: #6b7280;
+        font-family: Calibri, Arial, sans-serif;
     }
     .preview-a4-page {
         background: #ffffff;
         width: 210mm;
-        height: 297mm;
-        overflow: hidden;
+        box-sizing: border-box;
+        min-height: 297mm;
         position: relative;
         margin-bottom: 1.5em;
         padding: 1cm 2.5cm 2cm 2.5cm;
@@ -238,6 +258,67 @@
         display: block;
         margin: 0 auto;
     }
+    /* Kop + judul + nomor pada preview — disamakan dengan preview editor template */
+    .company-header {
+        text-align: center;
+        margin-bottom: 6px;
+    }
+    .doc-title {
+        text-align: center;
+        font-size: 16px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 4px 0 2px 0;
+        color: #1e293b;
+    }
+    .doc-number {
+        text-align: center;
+        font-size: 12px;
+        color: #6c757d;
+        margin: 0 0 24px 0;
+        font-weight: 500;
+    }
+    /* Gambaran area tanda tangan di preview */
+    .preview-sign-placeholder {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+        width: 100%;
+        page-break-inside: avoid;
+    }
+    .editor-sign-slot {
+        display: flex;
+        justify-content: center;
+    }
+    .editor-sign-box {
+        width: 170px;
+        padding: 10px;
+        border: 1px dashed #adb5bd;
+        border-radius: 8px;
+        text-align: center;
+        background: #ffffff;
+    }
+    .editor-sign-box-label {
+        font-weight: 700;
+        font-size: 11pt;
+        color: #1e293b;
+        margin-bottom: 6px;
+    }
+    .editor-sign-box-qr {
+        width: 110px;
+        height: 70px;
+        border: 2px dashed #adb5bd;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 6px;
+        font-size: 9px;
+        color: #adb5bd;
+        background: #ffffff;
+    }
     /* Placeholder highlight */
     .preview-placeholder {
         display: inline-block;
@@ -256,6 +337,17 @@
 
 @section('javascript')
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    // Back browser → kembali ke tampilan Jenis Surat
+    (function() {
+        if (window.history && window.history.pushState) {
+            history.pushState(null, '', location.href);
+            window.addEventListener('popstate', function() {
+                window.location.replace('{{ route("e-sign.jenis-surat") }}');
+            });
+        }
+    })();
+</script>
 <script>
     $(document).ready(function() {
         $('.btn-delete-template').on('click', function() {
@@ -357,11 +449,15 @@
                 data: { ajax: 1 },
                 success: function(res) {
                     let content = res.rendered || '<p class="text-muted">Tidak ada konten template.</p>';
+                    // Kop + judul + nomor + tanda tangan — disamakan dengan preview editor template.
+                    // Kop berulang di tiap halaman; judul & nomor hanya di halaman pertama.
                     let fullHtml = `
-                        <div class="preview-kop">
+                        <div class="company-header">
                             <img src="{{ url('') }}/assets/images/KOP-terbaru.png" alt="Kop Surat" class="kop-img-full">
                         </div>
-                    ` + content;
+                        <div class="doc-title">Judul Surat</div>
+                        <div class="doc-number">Nomor: _______________</div>
+                    ` + content + buildPreviewSignatureHtml(res);
                     fullHtml = fullHtml.replace(/\{\{(\w+)\}\}/g, '<span class="preview-placeholder">@{{$1}}</span>');
                     renderPreviewPages(fullHtml);
                 },
@@ -375,62 +471,143 @@
             var wrapper = document.querySelector('#previewModalBody');
             if (!wrapper) return;
 
-            // Hapus semua page kecuali yang pertama
+            // Hapus semua page & page break kecuali yang pertama
             var wrapperParent = wrapper.parentNode;
             var pages = wrapperParent.querySelectorAll('.preview-a4-page');
             for (var i = 1; i < pages.length; i++) pages[i].remove();
+            wrapperParent.querySelectorAll('.preview-page-break').forEach(function(b) { b.remove(); });
 
             wrapper.innerHTML = html;
 
-            // Tunggu gambar selesai loading, baru hitung pagination
-            var images = wrapper.querySelectorAll('img');
-            var pending = images.length;
-            if (pending === 0) {
-                doPagination(wrapper);
-            } else {
-                var loaded = 0;
-                images.forEach(function(img) {
-                    if (img.complete) {
-                        loaded++;
-                        if (loaded >= pending) doPagination(wrapper);
-                    } else {
-                        img.onload = function() {
+            // Paginasi SETELAH modal tampil penuh (agar ukuran terukur benar), menunggu gambar.
+            // Kalau konten tiba sebelum modal tampil (via AJAX), tunggu dulu event shown.
+            function run() {
+                var images = wrapper.querySelectorAll('img');
+                var pending = images.length;
+                if (pending === 0) {
+                    doPagination(wrapper);
+                } else {
+                    var loaded = 0;
+                    images.forEach(function(img) {
+                        if (img.complete) {
                             loaded++;
                             if (loaded >= pending) doPagination(wrapper);
-                        };
-                    }
-                });
+                        } else {
+                            img.onload = function() {
+                                loaded++;
+                                if (loaded >= pending) doPagination(wrapper);
+                            };
+                        }
+                    });
+                }
+            }
+            if ($('#previewModal').hasClass('show')) {
+                run();
+            } else {
+                $('#previewModal').one('shown.bs.modal', run);
             }
         }
 
-        function doPagination(firstPage) {
+                // Gambaran area tanda tangan — mengikuti setting sign template (sign_1/2/3)
+        function buildPreviewSignatureHtml(tpl) {
+            var s1 = (tpl && tpl.sign_1) ? 1 : 0;
+            var s2 = (tpl && tpl.sign_2) ? 1 : 0;
+            var s3 = (tpl && tpl.sign_3) ? 1 : 0;
+            function box(label) {
+                return '<div class="editor-sign-box">' +
+                    '<div class="editor-sign-box-label">' + label + '</div>' +
+                    '<div class="editor-sign-box-qr">QR Code<br>Digital Signature</div>' +
+                    '</div>';
+            }
+            var left = s2 ? box('Sign 2') : '';
+            var center = s3 ? box('Sign 3') : '';
+            var right = s1 ? box('Sign 1') : '';
+            return '<div class="preview-sign-placeholder">' +
+                '<div class="editor-sign-slot">' + left + '</div>' +
+                '<div class="editor-sign-slot">' + center + '</div>' +
+                '<div class="editor-sign-slot">' + right + '</div>' +
+                '</div>';
+        }
+
+        // Paginasi preview — disamakan dengan preview editor template:
+        // kop berulang di tiap halaman, judul/nomor halaman 1 saja, tanda tangan di akhir.
+        function doPagination(wrapper) {
+            var source = document.createElement('div');
+            while (wrapper.firstChild) source.appendChild(wrapper.firstChild);
+
+            // Pisahkan kop (berulang), judul & nomor (halaman 1), dan area tanda tangan (akhir)
+            var kopEl = null, hasKop = false;
+            var k = source.querySelector('.company-header');
+            if (k) { kopEl = k; k.parentNode.removeChild(k); hasKop = true; }
+            var titleEl = source.querySelector('.doc-title');
+            var numEl = source.querySelector('.doc-number');
+            var sig = source.querySelector('.preview-sign-placeholder');
+            if (sig) sig.parentNode.removeChild(sig);
+
+            // Halaman pertama = wrapper
+            wrapper.innerHTML = '';
+            if (hasKop) wrapper.appendChild(kopEl.cloneNode(true));
+            if (titleEl) wrapper.appendChild(titleEl);
+            if (numEl) wrapper.appendChild(numEl);
+
             var maxH = 297 * 3.78; // 297mm ke px
-            var allPages = [firstPage];
+            var allPages = [wrapper];
             var pageIndex = 0;
+
+            var nodes = Array.prototype.slice.call(source.childNodes);
+            for (var i = 0; i < nodes.length; i++) wrapper.appendChild(nodes[i]);
+
+            function makeNext(curr) {
+                var np = document.createElement('div');
+                np.className = 'preview-a4-page';
+                curr.parentNode.insertBefore(np, curr.nextSibling);
+                // Page break visual di antara kertas
+                var brk = document.createElement('div');
+                brk.className = 'preview-page-break';
+                curr.parentNode.insertBefore(brk, np);
+                // Halaman berikutnya diawali kop surat
+                if (hasKop) np.appendChild(kopEl.cloneNode(true));
+                allPages.push(np);
+                return np;
+            }
 
             while (pageIndex < allPages.length) {
                 var currentPage = allPages[pageIndex];
                 var safety = 0;
-
                 while (currentPage.scrollHeight > maxH + 5 && safety < 50) {
                     safety++;
                     var children = currentPage.children;
                     if (children.length <= 1) break; // sisakan minimal 1 elemen
 
                     var lastEl = children[children.length - 1];
-
-                    var nextPage = allPages[pageIndex + 1];
-                    if (!nextPage) {
-                        nextPage = document.createElement('div');
-                        nextPage.className = 'preview-a4-page';
-                        nextPage.style.marginTop = '0';
-                        currentPage.parentNode.insertBefore(nextPage, currentPage.nextSibling);
-                        allPages.push(nextPage);
-                    }
-                    nextPage.insertBefore(lastEl, nextPage.firstChild);
+                    var nextPage = allPages[pageIndex + 1] || makeNext(currentPage);
+                    // Sisipkan di awal konten (setelah kop) agar urutan tetap benar
+                    var ib = nextPage.children[hasKop ? 1 : 0];
+                    if (ib) nextPage.insertBefore(lastEl, ib); else nextPage.appendChild(lastEl);
                 }
                 pageIndex++;
             }
+
+            // Tempel area tanda tangan di halaman terakhir (bawah)
+            if (sig) {
+                var lastPage = allPages[allPages.length - 1];
+                lastPage.appendChild(sig);
+                if (lastPage.scrollHeight > maxH + 5) {
+                    lastPage.removeChild(sig);
+                    var fresh = makeNext(lastPage);
+                    fresh.appendChild(sig);
+                }
+            }
+
+            // Nomor halaman di pojok kanan bawah tiap kertas
+            allPages.forEach(function(pg, idx) {
+                var existing = pg.querySelector('.preview-page-number');
+                if (existing) existing.remove();
+                var num = document.createElement('div');
+                num.className = 'preview-page-number';
+                num.textContent = (idx + 1) + ' / ' + allPages.length;
+                pg.appendChild(num);
+            });
         }
     });
 </script>

@@ -189,6 +189,17 @@
 
 @section('javascript')
 <script>
+    // Back browser → kembali ke tampilan Jenis Surat
+    (function() {
+        if (window.history && window.history.pushState) {
+            history.pushState(null, '', location.href);
+            window.addEventListener('popstate', function() {
+                window.location.replace('{{ route("e-sign.jenis-surat") }}');
+            });
+        }
+    })();
+</script>
+<script>
 function updateColorPreview(){const c=$('select[name="color"]').val();const m={'primary':'#405189','success':'#0ab39c','warning':'#f7b84b','danger':'#f06548','info':'#299cdb','secondary':'#adb5bd','dark':'#1e293b'};$('#colorPreview').css('background-color',m[c]||'#405189');}
 $('select[name="color"]').on('change',updateColorPreview);updateColorPreview();
 </script>

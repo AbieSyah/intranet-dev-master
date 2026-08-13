@@ -34,7 +34,9 @@ class RoleController extends Controller
     {
         if ($id) $id = decrypt($id);
         $role = Role::with('permissions')->find($id);
-        $permissions = Permission::all();
+        $permissions = Permission::all()->filter(function ($permission) {
+            return !str_starts_with($permission->name, 'e-sign.') || in_array($permission->name, ['e-sign.menu', 'e-sign.profile']);
+        });
         $permissionGroups = $this->groupPermissions($permissions);
 
         return view('pages.administrator.role.form', compact('role', 'permissions', 'permissionGroups'));

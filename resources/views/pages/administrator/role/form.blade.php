@@ -63,7 +63,16 @@
                                                     @if ($subprefix)
                                                         <div class="col-md-6">
                                                             <h4 class="subheader" style="padding-top: 1em">
-                                                                {{ $subprefix }}</h4>
+                                                                @php
+                                                                    $eSignLabels = [
+                                                                        'menu' => 'Pengelola',
+                                                                        'profile' => 'Karyawan',
+                                                                    ];
+                                                                    $subLabel = ($prefix === 'e-sign' && isset($eSignLabels[$subprefix]))
+                                                                        ? $eSignLabels[$subprefix]
+                                                                        : $subprefix;
+                                                                @endphp
+                                                                {{ $subLabel }}</h4>
                                                             <div class="row">
                                                                 @if (!$role)
                                                                     @foreach ($permissions as $permission)

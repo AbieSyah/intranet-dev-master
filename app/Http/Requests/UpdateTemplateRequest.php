@@ -26,6 +26,9 @@ class UpdateTemplateRequest extends FormRequest
             'page_margin_left' => ['nullable', 'integer', 'min:5', 'max:100'],
             'page_margin_right' => ['nullable', 'integer', 'min:5', 'max:100'],
             'page_size' => ['nullable', 'string', Rule::in(['A4', 'Letter', 'Legal'])],
+            'sign_1' => ['boolean'],
+            'sign_2' => ['boolean'],
+            'sign_3' => ['boolean'],
         ];
     }
 

@@ -15,7 +15,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 <style>
     @page {
-        margin-top: 2cm;
+        margin-top: 6.2cm;
         margin-bottom: 2.5cm;
         margin-left: 2cm;
         margin-right: 2cm;
@@ -31,42 +31,75 @@
         width: 100%;
     }
 
-    /* Kop surat */
-    .company-header {
+    /* Kop surat — berulang di SETIAP halaman (position:fixed seperti footer) */
+    .pdf-repeating-header {
+        position: fixed;
+        top: -6.2cm;
+        left: 2cm;
+        right: 2cm;
         text-align: center;
-        margin-bottom: 8px;
-        margin-top: 0;
-        margin-left: -0.8cm;
-        margin-right: -0.8cm;
+        z-index: 10;
+    }
+    .pdf-repeating-header .company-header {
+        text-align: center;
+        margin: 0;
         padding-top: 0;
     }
-    .company-header img {
+    .pdf-repeating-header .company-header img {
         width: 85%;
         height: auto;
         display: block;
         margin: 0 auto;
     }
+    .pdf-repeating-header .doc-title {
+        text-align: center;
+        font-size: 16px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 4px 0 2px 0;
+        color: #1e293b;
+    }
+    .pdf-repeating-header .doc-number {
+        text-align: center;
+        font-size: 12px;
+        color: #6c757d;
+        margin: 0 0 6px 0;
+        font-weight: 500;
+    }
+
+    /* Judul & nomor surat — hanya di halaman pertama (flow) */
     .doc-title {
         text-align: center;
         font-size: 16px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1px;
-        margin-bottom: 4px;
+        margin: 8px 0 4px 0;
         color: #1e293b;
     }
     .doc-number {
         text-align: center;
         font-size: 12px;
         color: #6c757d;
-        margin-bottom: 28px;
+        margin-bottom: 24px;
         font-weight: 500;
     }
 
     /* Signature area */
     .signature-area {
+        width: 100%;
+        margin-top: 18px;
+    }
+    .sign-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+    }
+    .sign-cell {
+        width: 33.33%;
+        vertical-align: top;
         text-align: center;
-        margin-top: 32px;
     }
     .signature-box {
         display: inline-block;
@@ -120,7 +153,7 @@
     }
 
     /* Page break */
-    .company-header, .doc-title, .doc-number {
+    .doc-title, .doc-number {
         page-break-inside: avoid;
     }
     .signature-area {
@@ -144,15 +177,18 @@
 </div>
 @endif
 
-{{-- Header (kop surat + judul) --}}
-<div class="company-header">
-    @if(!empty($data['logo']))
-    <img src="{{ $data['logo'] }}" alt="Kop Surat">
-    @else
-    <img src="{{ url('') }}/assets/images/KOP-terbaru.png" alt="Kop Surat">
-    @endif
+{{-- Header (kop surat/logo) — berulang di setiap halaman via position:fixed --}}
+<div class="pdf-repeating-header">
+    <div class="company-header">
+        @if(!empty($data['logo']))
+        <img src="{{ $data['logo'] }}" alt="Kop Surat">
+        @else
+        <img src="{{ url('') }}/assets/images/KOP-terbaru.png" alt="Kop Surat">
+        @endif
+    </div>
 </div>
 
+{{-- Judul & nomor surat — hanya di halaman pertama --}}
 <div class="doc-title">{{ $data['title'] }}</div>
 <div class="doc-number">Nomor: {{ $doc->nomor_surat ?? $data['number'] }}</div>
 
@@ -168,32 +204,46 @@
             $signee1 = $doc->employee1_signee_id ? \App\Models\Employee::with('position')->find($doc->employee1_signee_id) : null;
             $signee2 = $doc->employee2_signee_id ? \App\Models\Employee::with('position')->find($doc->employee2_signee_id) : null;
             $signee3 = $doc->employee3_signee_id ? \App\Models\Employee::with('position')->find($doc->employee3_signee_id) : null;
+
+            // Hanya tampilkan slot yang aktif di template (default: semua)
+            $activeTemplate = \App\Models\ESignTemplate::where('jenis_surat_slug', $doc->jenis_surat_slug ?? $data['slug'] ?? null)
+                ->where('is_active', true)
+                ->first();
+            $signActive = $activeTemplate ? $activeTemplate->sign_slots : [1, 2, 3];
+
+            $signHas = [
+                1 => in_array(1, $signActive) && ($signee1 || $doc->employee1_signee_id),
+                2 => in_array(2, $signActive) && ($signee2 || $doc->employee2_signee_id),
+                3 => in_array(3, $signActive) && ($signee3 || $doc->employee3_signee_id),
+            ];
+            $signCount = 0;
+            foreach ($signHas as $h) { if ($h) $signCount++; }
+
+            // Posisi otomatis sesuai jumlah sign: 1=kanan, 2=kiri+kanan, 3=kiri+tengah+kanan
+            $signCells = ['left' => null, 'center' => null, 'right' => null];
+            if ($signCount === 1)     { $signCells['right'] = 1; }
+            elseif ($signCount === 2) { $signCells['left'] = 1; $signCells['right'] = 2; }
+            else                      { $signCells['left'] = 1; $signCells['center'] = 2; $signCells['right'] = 3; }
         @endphp
         <div class="signature-area">
-            @if($signee1 || $doc->employee1_signee_id)
-            <div class="signature-box">
-                <div class="sig-label">Sign 1</div>
-                <div class="sig-qr">QR Code<br>Digital Signature</div>
-                <div class="sig-name">{{ $signee1->fullname ?? '—' }}</div>
-                <div class="sig-pos">{{ $signee1->position->nama ?? '—' }}</div>
-            </div>
-            @endif
-            @if($signee2 || $doc->employee2_signee_id)
-            <div class="signature-box">
-                <div class="sig-label">Sign 2</div>
-                <div class="sig-qr">QR Code<br>Digital Signature</div>
-                <div class="sig-name">{{ $signee2->fullname ?? '—' }}</div>
-                <div class="sig-pos">{{ $signee2->position->nama ?? '—' }}</div>
-            </div>
-            @endif
-            @if($signee3 || $doc->employee3_signee_id)
-            <div class="signature-box">
-                <div class="sig-label">Sign 3</div>
-                <div class="sig-qr">QR Code<br>Digital Signature</div>
-                <div class="sig-name">{{ $signee3->fullname ?? '—' }}</div>
-                <div class="sig-pos">{{ $signee3->position->nama ?? '—' }}</div>
-            </div>
-            @endif
+            <table class="sign-table"><tr>
+            @foreach(['left','center','right'] as $cell)
+                <td class="sign-cell">
+                @if($signCells[$cell])
+                    @php
+                        $n = $signCells[$cell];
+                        $s = ${'signee'.$n};
+                    @endphp
+                    <div class="signature-box">
+                        <div class="sig-label">Sign {{ $n }}</div>
+                        <div class="sig-qr">QR Code<br>Digital Signature</div>
+                        <div class="sig-name">{{ $s->fullname ?? '—' }}</div>
+                        <div class="sig-pos">{{ $s->position->nama ?? '—' }}</div>
+                    </div>
+                @endif
+                </td>
+            @endforeach
+            </tr></table>
         </div>
     @endif
 @else

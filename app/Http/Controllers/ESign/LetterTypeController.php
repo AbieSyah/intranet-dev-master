@@ -81,7 +81,7 @@ class LetterTypeController extends Controller
         $this->letterTypeService->update($id, $request->validated());
 
         return redirect()
-            ->route('e-sign.jenis-surat.edit', $id)
+            ->route('e-sign.jenis-surat')
             ->with('success', 'Jenis surat berhasil diperbarui!');
     }
 

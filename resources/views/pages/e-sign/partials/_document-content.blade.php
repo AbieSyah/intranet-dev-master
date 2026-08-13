@@ -55,14 +55,17 @@
     .signature-area {
         display: flex;
         flex-wrap: wrap;
-        gap: 32px;
-        justify-content: center;
-        margin-top: 32px;
+        gap: 24px;
+        margin-top: 18px;
     }
     .signature-box {
         text-align: center;
         min-width: 160px;
     }
+    /* Posisi sesuai jumlah sign */
+    .signature-area.sign-one { justify-content: flex-end; }
+    .signature-area.sign-two { justify-content: space-between; }
+    .signature-area.sign-three { justify-content: space-between; }
 
     .company-header, .doc-title, .doc-number {
         page-break-inside: avoid;
@@ -86,7 +89,13 @@
 
     {{-- Signature area --}}
     @if(strpos($doc->content, 'signature-box') === false && strpos($doc->content, 'QR Code') === false)
-        @include('pages.e-sign.partials.signature')
+        @php
+            $activeTemplate = \App\Models\ESignTemplate::where('jenis_surat_slug', $doc->jenis_surat_slug ?? $data['slug'] ?? null)
+                ->where('is_active', true)
+                ->first();
+            $signActive = $activeTemplate ? $activeTemplate->sign_slots : null;
+        @endphp
+        @include('pages.e-sign.partials.signature', ['signActive' => $signActive])
     @endif
 
     {{-- Footer note untuk web preview --}}

@@ -39,13 +39,19 @@
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
                     <li class="breadcrumb-item"><a href="javascript: void(0);">E-Sign Management</a></li>
-                    <li class="breadcrumb-item"><a href="{{ route('e-sign.dashboard') }}">Dashboard</a></li>
                     <li class="breadcrumb-item active">Daftar Surat</li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
+
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="ri-checkbox-circle-line me-1"></i> {{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
 
 @if($currentStatus)
 <div class="row mb-3">
@@ -136,7 +142,13 @@
                                 <i class="ri-arrow-right-s-line btn-expand fs-18" data-target="{{ $rowId }}"></i>
                             </td>
                             <td>{{ $i + 1 }}</td>
-                            <td><span class="fw-medium">{{ $doc['nomor_surat'] ?? '—' }}</span></td>
+                            <td><span class="fw-medium">{{ $doc['nomor_surat'] ?? '—' }}</span>
+                                @if(!empty($doc['is_batch']))
+                                <span class="badge bg-dark ms-1" title="Bagian dari multi-surat (batch #{{ $doc['batch_id'] }})">
+                                    <i class="ri-stack-line me-1"></i>{{ $doc['batch_id'] }}-{{ str_pad((string)($doc['nomor_sub'] ?? '-'), 3, '0', STR_PAD_LEFT) }}
+                                </span>
+                                @endif
+                            </td>
                             <td>{{ $doc['jenis_surat'] }}</td>
                             <td>{{ $doc['template_name'] }}</td>
                             <td>{{ $doc['tanggal'] }}</td>
@@ -172,9 +184,21 @@
                                         </ul>
                                         <div class="mt-3">
                                             @if($doc['status_raw'] === 'draft')
+                                            @if(!empty($doc['is_batch']))
+                                            <a href="{{ route('e-sign.batch.edit', $doc['batch_id']) }}" class="btn btn-sm btn-warning">
+                                                <i class="ri-pencil-line me-1"></i> Edit Batch
+                                            </a>
+                                            <form method="POST" action="{{ route('e-sign.batch.send', $doc['batch_id']) }}" class="d-inline" onsubmit="return confirm('Kirim multi-surat ini ke semua penerima?');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-info">
+                                                    <i class="ri-send-plane-line me-1"></i> Kirim Batch
+                                                </button>
+                                            </form>
+                                            @else
                                             <a href="{{ route('e-sign.edit', $doc['id']) }}" class="btn btn-sm btn-warning">
                                                 <i class="ri-pencil-line me-1"></i> Edit Surat
                                             </a>
+                                            @endif
                                             @endif
                                             <a href="{{ route('e-sign.pdf', $doc['id']) }}" class="btn btn-sm btn-success">
                                                 <i class="ri-download-2-line me-1"></i> Download PDF

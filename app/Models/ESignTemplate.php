@@ -26,6 +26,9 @@ class ESignTemplate extends Model
         'page_margin_left',
         'page_margin_right',
         'page_size',
+        'sign_1',
+        'sign_2',
+        'sign_3',
     ];
 
     protected $casts = [
@@ -35,6 +38,9 @@ class ESignTemplate extends Model
         'page_margin_bottom' => 'integer',
         'page_margin_left' => 'integer',
         'page_margin_right' => 'integer',
+        'sign_1' => 'boolean',
+        'sign_2' => 'boolean',
+        'sign_3' => 'boolean',
     ];
 
     // ========== RELATIONSHIPS ==========
@@ -67,7 +73,19 @@ class ESignTemplate extends Model
         return $this->updated_at ? Carbon::parse($this->updated_at)->format('d M Y H:i') : '-';
     }
 
-    public function getStatusBadgeAttribute()
+    public function getSignSlotsAttribute(): array
+    {
+        $slots = [];
+        if ($this->sign_1) $slots[] = 1;
+        if ($this->sign_2) $slots[] = 2;
+        if ($this->sign_3) $slots[] = 3;
+        return $slots;
+    }
+
+    public function getSignCountAttribute(): int
+    {
+        return count($this->sign_slots);
+    }    public function getStatusBadgeAttribute()
     {
         if ($this->is_active) {
             return '<span class="badge bg-success">Aktif</span>';

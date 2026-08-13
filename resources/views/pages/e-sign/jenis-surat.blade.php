@@ -73,6 +73,13 @@
     </div>
 </div>
 
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="ri-checkbox-circle-line me-1"></i> {{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
 <div class="row g-4">
     @foreach($letterTypes as $type)
     <div class="col-xl-4 col-lg-6 col-md-6">

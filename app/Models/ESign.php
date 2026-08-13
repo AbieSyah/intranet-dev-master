@@ -18,8 +18,14 @@ class ESign extends Model
         'employee1_signee_id',
         'employee2_signee_id',
         'employee3_signee_id',
+        'employee1_signed_at',
+        'employee2_signed_at',
+        'employee3_signed_at',
         'letter_type_id',
         'template_id',
+        'batch_id',
+        'nomor_sub',
+        'is_parallel_sign',
         'nomor_surat',
         'document_name',
         'title',
@@ -79,6 +85,14 @@ class ESign extends Model
     public function template()
     {
         return $this->belongsTo(ESignTemplate::class, 'template_id');
+    }
+
+    /**
+     * Batch induk untuk dokumen multi-surat (nullable untuk surat tunggal).
+     */
+    public function batch()
+    {
+        return $this->belongsTo(ESignBatch::class, 'batch_id');
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Http\Requests\StoreESignRequest;
 use App\Http\Requests\UpdateESignRequest;
 use App\Models\Employee;
 use App\Models\ESign;
+use App\Models\ESignBatch;
 use App\Models\LetterType;
 use App\Services\ESignService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -15,25 +16,6 @@ use Illuminate\Support\Facades\Auth;
 
 class ESignController extends Controller
 {
-    public function dashboard()
-    {
-        $counts = [
-            'total' => ESign::count(),
-            'draft' => ESign::draft()->count(),
-            'waiting' => ESign::waitingSign()->count(),
-            'signed' => ESign::completed()->count(),
-            'rejected' => ESign::rejected()->count(),
-        ];
-
-        $recentDocuments = ESign::with('employee.department', 'employee.position')
-            ->latest()
-            ->take(10)
-            ->get()
-            ->map(fn($doc) => $this->formatDocument($doc));
-
-        return view('pages.e-sign.dashboard', compact('counts', 'recentDocuments'));
-    }
-
     public function daftarSurat(Request $request)
     {
         $status = $request->query('status');
@@ -133,7 +115,6 @@ class ESignController extends Controller
 
         $employees = Employee::whereNotNull('fullname')
             ->orderBy('fullname')
-            ->limit(50)
             ->get();
 
         // Prepare templates data as JSON for JavaScript
@@ -146,6 +127,9 @@ class ESignController extends Controller
                     'is_active' => $tpl->is_active,
                     'created_at' => $tpl->created_at->diffForHumans(),
                     'content' => $tpl->content,
+                    'sign_1' => (int)($tpl->sign_1 ?? 1),
+                    'sign_2' => (int)($tpl->sign_2 ?? 0),
+                    'sign_3' => (int)($tpl->sign_3 ?? 0),
                 ];
             })];
         });
@@ -178,7 +162,6 @@ class ESignController extends Controller
 
         $employees = Employee::whereNotNull('fullname')
             ->orderBy('fullname')
-            ->limit(50)
             ->get();
 
         // Ambil semua posisi/jabatan untuk dropdown pemilihan jabatan
@@ -205,10 +188,24 @@ class ESignController extends Controller
             'sign_employee1','sign_employee2','sign_employee3',
         ];
 
+        // Daftar field employee yang bisa dipakai sebagai placeholder employee/employee1/2/3
+        $employeePlaceholderFields = [
+            'nik','no_ktp','fullname','email','addressktp','birthplace','birthdate','gender',
+            'religion','marital','hp','joindate','enddate','status','work_location',
+            'domicile_address','emergency_contact','emergency_contact_relation',
+            'emergency_contact_handphone','emergency_contact_address','permanent_startdate',
+            'iso_position','cost_center','last_education','major_last_education',
+            'last_education_institutional','tax_dependents','npwp','outsourcing_vendor',
+            'bpjs_kesehatan','bpjs_ketenagakerjaan','latest_agreement_number',
+            'active_agreement_number','bank_name','bank_account','bank_account_holder',
+            'blood_type','contract_startdate','contract_number','department','position',
+            'section','level','area','building',
+        ];
+
         return view('pages.e-sign.template', compact(
             'data', 'employees', 'mode', 'doc', 'type', 'templates',
             'activeTemplate', 'placeholders', 'preselectedTemplateId',
-            'excludedPlaceholders', 'positions'
+            'excludedPlaceholders', 'positions', 'employeePlaceholderFields'
         ));
     }
 
@@ -242,7 +239,6 @@ class ESignController extends Controller
 
         $employees = Employee::whereNotNull('fullname')
             ->orderBy('fullname')
-            ->limit(50)
             ->get();
 
         // Ambil semua posisi/jabatan untuk dropdown pemilihan jabatan
@@ -265,10 +261,24 @@ class ESignController extends Controller
             'sign_employee1','sign_employee2','sign_employee3',
         ];
 
+        // Daftar field employee yang bisa dipakai sebagai placeholder employee/employee1/2/3
+        $employeePlaceholderFields = [
+            'nik','no_ktp','fullname','email','addressktp','birthplace','birthdate','gender',
+            'religion','marital','hp','joindate','enddate','status','work_location',
+            'domicile_address','emergency_contact','emergency_contact_relation',
+            'emergency_contact_handphone','emergency_contact_address','permanent_startdate',
+            'iso_position','cost_center','last_education','major_last_education',
+            'last_education_institutional','tax_dependents','npwp','outsourcing_vendor',
+            'bpjs_kesehatan','bpjs_ketenagakerjaan','latest_agreement_number',
+            'active_agreement_number','bank_name','bank_account','bank_account_holder',
+            'blood_type','contract_startdate','contract_number','department','position',
+            'section','level','area','building',
+        ];
+
         return view('pages.e-sign.template', compact(
             'data', 'employees', 'mode', 'doc', 'type', 'templates',
             'activeTemplate', 'placeholders', 'excludedPlaceholders',
-            'positions'
+            'positions', 'employeePlaceholderFields'
         ));
     }
 
@@ -346,6 +356,9 @@ class ESignController extends Controller
             'signee1_name' => $signee1->fullname ?? '-',
             'signee2_name' => $signee2->fullname ?? '-',
             'signee3_name' => $signee3->fullname ?? '-',
+            'is_batch' => !empty($doc->batch_id),
+            'batch_id' => $doc->batch_id,
+            'nomor_sub' => $doc->nomor_sub,
         ];
     }
 
@@ -354,10 +367,40 @@ class ESignController extends Controller
      */
     public function store(StoreESignRequest $request, ESignService $esignService)
     {
-        $eSign = $esignService->storeDraft($request->validated());
+        $data = $request->validated();
+        $sendNow = ($data['send_now'] ?? '') === '1';
+
+        // Multi-surat → simpan N dokumen dalam 1 batch
+        if (($data['multi_surat'] ?? '') === '1' && !empty($data['recipients'])) {
+            $batch = $esignService->storeDraftBatch($data);
+
+            // Langsung kirim ke semua pihak (Sign 1 & tiap penerima/Sign 2)
+            if ($sendNow) {
+                $esignService->sendBatch($batch);
+
+                return redirect()
+                    ->route('e-sign.daftar-surat')
+                    ->with('success', 'Multi-surat (' . count($data['recipients']) . ' penerima) berhasil disimpan & dikirim ke semua pihak!');
+            }
+
+            return redirect()
+                ->route('e-sign.daftar-surat')
+                ->with('success', 'Draft multi-surat (' . count($data['recipients']) . ' penerima) berhasil disimpan!');
+        }
+
+        $eSign = $esignService->storeDraft($data);
+
+        // Langsung kirim ke Sign 1 & Sign 2
+        if ($sendNow) {
+            $esignService->sendSingleToBoth($eSign);
+
+            return redirect()
+                ->route('e-sign.daftar-surat')
+                ->with('success', 'Surat berhasil disimpan & dikirim ke penandatangan (Sign 1 & Sign 2)!');
+        }
 
         return redirect()
-            ->route('e-sign.preview', $eSign->id)
+            ->route('e-sign.daftar-surat')
             ->with('success', 'Draft surat berhasil disimpan!');
     }
 
@@ -366,10 +409,22 @@ class ESignController extends Controller
      */
     public function update(UpdateESignRequest $request, ESign $esign, ESignService $esignService)
     {
-        $esignService->updateDraft($esign, $request->validated());
+        $data = $request->validated();
+        $sendNow = ($data['send_now'] ?? '') === '1';
+
+        $esignService->updateDraft($esign, $data);
+
+        // Langsung kirim ke Sign 1 & Sign 2
+        if ($sendNow) {
+            $esignService->sendSingleToBoth($esign->fresh());
+
+            return redirect()
+                ->route('e-sign.daftar-surat')
+                ->with('success', 'Surat berhasil diperbarui & dikirim ke penandatangan (Sign 1 & Sign 2)!');
+        }
 
         return redirect()
-            ->route('e-sign.preview', $esign->id)
+            ->route('e-sign.daftar-surat')
             ->with('success', 'Draft surat berhasil diperbarui!');
     }
 
@@ -383,6 +438,110 @@ class ESignController extends Controller
         return redirect()
             ->route('e-sign.preview', $esign->id)
             ->with('success', 'Surat berhasil dikirim ke Employee.');
+    }
+
+    /**
+     * Show the editor to update an existing multi-surat batch (still draft).
+     * Reuses the same editor view (template.blade.php) in 'edit-batch' mode.
+     */
+    public function editBatch(ESignBatch $batch)
+    {
+        if ($batch->nomor_surat) {
+            abort(403, 'Batch yang sudah dikirim tidak dapat diedit.');
+        }
+
+        $letterType = $batch->letterType ?? LetterType::where('slug', $batch->jenis_surat_slug)->first();
+        $type = $letterType;
+        $templates = $letterType ? $letterType->templates()->get() : collect();
+        $activeTemplate = $batch->template ?? ($letterType ? $letterType->activeTemplate : null);
+
+        $data = [
+            'slug'        => $batch->jenis_surat_slug,
+            'title'       => $letterType->name ?? $batch->jenis_surat_slug,
+            'short_title' => $letterType->name ?? $batch->jenis_surat_slug,
+            'number'      => $batch->nomor_surat,
+        ];
+
+        $employees = Employee::whereNotNull('fullname')->orderBy('fullname')->get();
+        $positions = \App\Models\Position::orderBy('nama')->get();
+        $placeholders = config('esign.placeholders', []);
+        $mode = 'edit-batch';
+        $doc = null;
+        $batchDocs = $batch->documents()->orderBy('nomor_sub')->get();
+        $preselectedTemplateId = $batch->template_id;
+
+        $excludedPlaceholders = [
+            'employee_name','employee_nik','employee_position','employee_department',
+            'employee_birthplace','employee_birthdate','employee_gender','employee_religion',
+            'employee_marital','employee_hp','employee_email',
+            'employee2_name','employee2_nik','employee2_position','employee2_department',
+            'employee2_birthplace','employee2_birthdate','employee2_gender','employee2_religion',
+            'employee2_marital','employee2_hp','employee2_email',
+            'employee3_name','employee3_nik','employee3_position','employee3_department',
+            'employee3_birthplace','employee3_birthdate','employee3_gender','employee3_religion',
+            'employee3_marital','employee3_hp','employee3_email',
+            'nomor_surat','tanggal_mulai','tanggal_akhir','judul_surat','today',
+            'sign_employee1','sign_employee2','sign_employee3',
+        ];
+
+        $employeePlaceholderFields = [
+            'nik','no_ktp','fullname','email','addressktp','birthplace','birthdate','gender',
+            'religion','marital','hp','joindate','enddate','status','work_location',
+            'domicile_address','emergency_contact','emergency_contact_relation',
+            'emergency_contact_handphone','emergency_contact_address','permanent_startdate',
+            'iso_position','cost_center','last_education','major_last_education',
+            'last_education_institutional','tax_dependents','npwp','outsourcing_vendor',
+            'bpjs_kesehatan','bpjs_ketenagakerjaan','latest_agreement_number',
+            'active_agreement_number','bank_name','bank_account','bank_account_holder',
+            'blood_type','contract_startdate','contract_number','department','position',
+            'section','level','area','building',
+        ];
+
+        return view('pages.e-sign.template', compact(
+            'data', 'employees', 'mode', 'doc', 'type', 'templates',
+            'activeTemplate', 'placeholders', 'preselectedTemplateId',
+            'excludedPlaceholders', 'positions', 'employeePlaceholderFields',
+            'batch', 'batchDocs'
+        ));
+    }
+
+    /**
+     * Update an existing multi-surat batch (still draft).
+     */
+    public function updateBatch(StoreESignRequest $request, ESignBatch $batch, ESignService $esignService)
+    {
+        if ($batch->nomor_surat) {
+            abort(403, 'Batch yang sudah dikirim tidak dapat diedit.');
+        }
+
+        $data = $request->validated();
+
+        $esignService->updateDraftBatch($batch, $data);
+
+        // Langsung kirim ke semua pihak (Sign 1 & tiap penerima/Sign 2)
+        if (($data['send_now'] ?? '') === '1') {
+            $esignService->sendBatch($batch->fresh());
+
+            return redirect()
+                ->route('e-sign.daftar-surat')
+                ->with('success', 'Multi-surat berhasil diperbarui & dikirim ke semua pihak!');
+        }
+
+        return redirect()
+            ->route('e-sign.daftar-surat')
+            ->with('success', 'Draft multi-surat berhasil diperbarui!');
+    }
+
+    /**
+     * Send a multi-surat batch: generate nomor & notify HR + all recipients.
+     */
+    public function sendBatch(ESignBatch $batch, ESignService $esignService)
+    {
+        $esignService->sendBatch($batch);
+
+        return redirect()
+            ->route('e-sign.daftar-surat')
+            ->with('success', 'Multi-surat (' . $batch->total_recipients . ' penerima) berhasil dikirim ke semua penerima.');
     }
 
     /**
@@ -404,7 +563,8 @@ class ESignController extends Controller
      */
     public function reject(ESign $esign, ESignService $esignService)
     {
-        $esignService->rejectByEmployee($esign);
+        $employeeId = Auth::user()->employee_id;
+        $esignService->rejectByEmployee($esign, $employeeId);
 
         return redirect()
             ->route('e-sign.profile-index')

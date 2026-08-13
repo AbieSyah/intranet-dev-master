@@ -13,18 +13,65 @@
             justify-content: center;
         }
         .doc-preview {
-            background: #fff;
             width: 100%;
             max-width: 800px;
-            min-height: 1050px;
+            padding: 0;
+        }
+        /* Setiap halaman A4 pada preview (dibuat otomatis via JS pagination) */
+        .doc-preview-page {
+            background: #fff;
+            width: 100%;
+            height: 1050px;
             padding: 60px 56px 70px 56px;
+            box-sizing: border-box;
             box-shadow: 0 4px 24px rgba(0,0,0,0.10);
             border: 1px solid #dee2e6;
             border-radius: 4px;
-            font-size: 13px;
-            line-height: 1.7;
+            font-family: Calibri, Arial, sans-serif;
+            font-size: 12pt;
+            line-height: 1.5;
             color: #212529;
             position: relative;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .doc-preview-page .page-inner {
+            height: 100%;
+            overflow: hidden;
+        }
+        .doc-preview-page .page-number {
+            position: absolute;
+            bottom: 24px;
+            right: 56px;
+            font-size: 10px;
+            color: #6c757d;
+            line-height: 1;
+        }
+        .doc-preview p {
+            margin: 0 0 0.75em 0;
+            padding: 0;
+        }
+        .doc-preview h1,
+        .doc-preview h2,
+        .doc-preview h3,
+        .doc-preview h4,
+        .doc-preview h5 {
+            font-family: Calibri, Arial, sans-serif;
+        }
+        .doc-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11pt;
+        }
+        .doc-preview table td,
+        .doc-preview table th {
+            border: 1px solid #212529;
+            padding: 6px 8px;
+            vertical-align: top;
+        }
+        .doc-preview table th {
+            background: #f0f0f0;
+            font-weight: 700;
         }
         .doc-preview .company-header {
             text-align: center;
@@ -128,9 +175,9 @@
         <div class="doc-preview-wrapper">
             <div class="doc-preview" id="docPreview">
                 @include('pages.e-sign.partials._document-content')
-                {{-- Footer preview — absolute bottom --}}
+                {{-- Catatan penerbitan — masuk sebagai konten & ikut ter-pagination --}}
                 @if(!$doc->isDraft())
-                <div class="preview-footer">
+                <div class="preview-footer-note">
                     <i class="ri-shield-check-line me-1"></i>
                     Dokumen diterbitkan melalui sistem INTRANET E-Sign pada
                     <strong>{{ $doc->updated_at ? \Carbon\Carbon::parse($doc->updated_at)->format('d/m/Y H:i') : '-' }}</strong>
@@ -241,6 +288,133 @@
 
 @section('javascript')
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    // Back browser → kembali ke tampilan Daftar Surat
+    (function() {
+        if (window.history && window.history.pushState) {
+            history.pushState(null, '', location.href);
+            window.addEventListener('popstate', function() {
+                window.location.replace('{{ route("e-sign.daftar-surat") }}');
+            });
+        }
+    })();
+</script>
+<script>
+    // ===== Pagination Dokumen Preview =====
+    // Membagi isi surat menjadi beberapa halaman A4 dan menampilkan nomor halaman
+    // dengan format "X / Y" (mengikuti total halaman).
+    (function() {
+        function paginateDocument() {
+            var container = document.getElementById('docPreview');
+            if (!container) return;
+
+            // Dimensi halaman A4 preview (harus sinkron dengan CSS .doc-preview-page)
+            var CONTENT_H = 1050 - 60 - 70; // 920 = tinggi area isi (.page-inner)
+
+            // Snapshot seluruh node teratas lalu kosongkan container
+            var source = document.createElement('div');
+            while (container.firstChild) source.appendChild(container.firstChild);
+
+            // Buka bungkus .doc-content agar paragraf jadi node sejajar dengan header,
+            // sehingga konten bisa dipindah per-paragraf ke halaman berikutnya.
+            var wrappers = source.querySelectorAll('.doc-content');
+            for (var w = 0; w < wrappers.length; w++) {
+                var dc = wrappers[w];
+                while (dc.firstChild) source.insertBefore(dc.firstChild, dc);
+                dc.remove();
+            }
+
+            // Pisahkan kop surat (logo) agar diulang di SETIAP halaman,
+            // sedangkan judul & nomor surat hanya muncul di halaman pertama.
+            var kopEl = null, titleEl = null, numEl = null, hasKop = false;
+            var kopNode = source.querySelector('.company-header');
+            if (kopNode) { kopEl = kopNode; kopNode.parentNode.removeChild(kopNode); hasKop = true; }
+            var titleNode = source.querySelector('.doc-title');
+            if (titleNode) { titleEl = titleNode; }
+            var numNode = source.querySelector('.doc-number');
+            if (numNode) { numEl = numNode; }
+
+            // Pisahkan area tanda tangan agar selalu berada di AKHIR dokumen (di bawah),
+            // dan tidak ikut ter-paginasi ke atas halaman.
+            var sigEl = source.querySelector('.esign-signature-area');
+            if (sigEl) sigEl.parentNode.removeChild(sigEl);
+
+            function makePage(withTitle) {
+                var page = document.createElement('div');
+                page.className = 'doc-preview-page';
+                var inner = document.createElement('div');
+                inner.className = 'page-inner';
+                page.appendChild(inner);
+                var num = document.createElement('div');
+                num.className = 'page-number';
+                page.appendChild(num);
+                container.appendChild(page);
+                // Setiap halaman diawali kop surat (logo); judul & nomor hanya halaman pertama
+                if (hasKop) inner.appendChild(kopEl.cloneNode(true));
+                if (withTitle) {
+                    if (titleEl) inner.appendChild(titleEl);
+                    if (numEl) inner.appendChild(numEl);
+                }
+                return { el: page, inner: inner };
+            }
+
+            var pages = [];
+            var current = makePage(true);
+            pages.push(current);
+
+            // Tinggi isi halaman saat ini. scrollHeight mencerminkan tinggi isi sebenarnya
+            // walau halaman berukuran tetap (height:100%), jadi halaman bertambah otomatis
+            // sesuai banyaknya konten.
+            function pageH() {
+                return current.inner.scrollHeight;
+            }
+
+            function place(node) {
+                if (node.nodeType === 3) {
+                    if (node.textContent.trim() === '') return;
+                    current.inner.appendChild(node);
+                    return;
+                }
+                current.inner.appendChild(node);
+                if (pageH() > CONTENT_H) {
+                    current.inner.removeChild(node);
+                    current = makePage(false);
+                    pages.push(current);
+                    current.inner.appendChild(node);
+                }
+            }
+
+            var nodes = Array.prototype.slice.call(source.childNodes);
+            for (var i = 0; i < nodes.length; i++) place(nodes[i]);
+
+            // Tempel area tanda tangan di halaman TERAKHIR (di bawah konten).
+            // Jika tidak muat, pindah ke halaman baru agar tetap di akhir dokumen.
+            if (sigEl) {
+                var lastInner = pages[pages.length - 1].inner;
+                lastInner.appendChild(sigEl);
+                if (lastInner.scrollHeight > CONTENT_H) {
+                    lastInner.removeChild(sigEl);
+                    var fresh = makePage(false);
+                    pages.push(fresh);
+                    fresh.inner.appendChild(sigEl);
+                }
+            }
+
+            // Tulis nomor halaman "X / Y"
+            for (var p = 0; p < pages.length; p++) {
+                var num = pages[p].el.querySelector('.page-number');
+                if (num) num.textContent = (p + 1) + ' / ' + pages.length;
+            }
+        }
+
+        // Jalankan setelah seluruh konten (termasuk gambar kop surat) termuat
+        if (document.readyState === 'complete') {
+            paginateDocument();
+        } else {
+            window.addEventListener('load', paginateDocument);
+        }
+    })();
+</script>
 <script>
     $(document).ready(function() {
         $('#btnHapusSurat').on('click', function() {

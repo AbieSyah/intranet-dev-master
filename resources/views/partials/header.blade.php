@@ -364,13 +364,11 @@
                     <div class="dropdown-menu dropdown-menu-end">
                         <!-- item-->
                         <h6 class="dropdown-header">Welcome {{ Auth::user()->name }}</h6>
-                        @can('emp.menu')
-                        <a class="dropdown-item" href="{{route('home')}}"><i class="mdi mdi-account-circle text-muted fs-16 align-middle me-1"></i> <span class="align-middle">My Profile</span></a>
+                        @if(auth()->user()->hasRole(['super_admin', 'Super User']) || auth()->user()->can('hrd.menu.profile'))
+                        <a class="dropdown-item" href="{{route('profile')}}"><i class="mdi mdi-account-circle text-muted fs-16 align-middle me-1"></i> <span class="align-middle">My Profile</span></a>
                         @else
-                            @can('hrd.menu.profile')
-                            <a class="dropdown-item" href="{{route('profile')}}"><i class="mdi mdi-account-circle text-muted fs-16 align-middle me-1"></i> <span class="align-middle">My Profile</span></a>
-                            @endcan
-                        @endcan
+                            <a class="dropdown-item" href="{{route('home')}}"><i class="mdi mdi-account-circle text-muted fs-16 align-middle me-1"></i> <span class="align-middle">My Profile</span></a>
+                        @endif
                         <a class="dropdown-item" href="{{ route('user.password.index') }}">
                             <i class="mdi mdi-lock text-muted fs-16 align-middle me-1"></i>
                             <span class="align-middle">Reset Password</span>

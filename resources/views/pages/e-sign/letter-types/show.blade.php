@@ -119,3 +119,17 @@
     </div>
 </div>
 @endsection
+
+@section('javascript')
+<script>
+    // Back browser → kembali ke tampilan Jenis Surat
+    (function() {
+        if (window.history && window.history.pushState) {
+            history.pushState(null, '', location.href);
+            window.addEventListener('popstate', function() {
+                window.location.replace('{{ route("e-sign.jenis-surat") }}');
+            });
+        }
+    })();
+</script>
+@endsection

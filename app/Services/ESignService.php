@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\ESign;
+use App\Models\ESignBatch;
 use App\Models\ESignTemplate;
 use App\Notifications\ESignNotification;
 use Carbon\Carbon;
@@ -19,11 +20,17 @@ class ESignService
     protected DocumentNumberService $numberService;
 
     /**
+     * The log service.
+     */
+    protected LogService $logService;
+
+    /**
      * Create a new ESignService instance.
      */
-    public function __construct(DocumentNumberService $numberService)
+    public function __construct(DocumentNumberService $numberService, LogService $logService)
     {
         $this->numberService = $numberService;
+        $this->logService = $logService;
     }
 
     /**
@@ -89,9 +96,23 @@ class ESignService
                 'status'           => ESign::STATUS_DRAFT,
                 'created_by'       => Auth::id(),
                 'upload_date'      => Carbon::now(),
-                'tanggal_mulai'    => $data['tanggal_mulai'],
-                'tanggal_akhir'    => $data['tanggal_akhir'] ?? null,
+                'tanggal_mulai'    => $this->normalizeDate($data['tanggal_mulai'] ?? null),
+                'tanggal_akhir'    => $this->normalizeDate($data['tanggal_akhir'] ?? null),
             ]);
+
+            $this->logService->logCurrentUser(
+                'insert',
+                $this->logService->buildDescription(
+                    'Buat Draft Surat pada menu E-Sign.',
+                    [],
+                    [
+                        'Nomor Surat' => $eSign->nomor_surat ?? '-',
+                        'Jenis Surat' => $eSign->jenis_surat_label,
+                        'Judul' => $eSign->title ?? $eSign->document_name ?? '-',
+                        'Status' => ($eSign->status ?? '') . '',
+                    ]
+                )
+            );
 
             return $eSign;
         });
@@ -117,6 +138,12 @@ class ESignService
         }
 
         return DB::transaction(function () use ($eSign, $data) {
+            $before = [
+                'Judul' => $eSign->title ?? $eSign->document_name ?? '-',
+                'Tanggal Mulai' => $eSign->tanggal_mulai ? (string) $eSign->tanggal_mulai : '-',
+                'Tanggal Akhir' => $eSign->tanggal_akhir ? (string) $eSign->tanggal_akhir : '-',
+            ];
+
             $employeeId = $data['employee_id'] ?? null;
             if (is_array($employeeId)) {
                 $employeeId = count($employeeId) > 0 ? (int) $employeeId[0] : $eSign->employee_id;
@@ -131,13 +158,231 @@ class ESignService
                 'document_name' => $data['title'] ?? $eSign->document_name,
                 'content'       => $data['content'] ?? $eSign->content,
                 'description'   => $data['description'] ?? null,
-                'tanggal_mulai' => $data['tanggal_mulai'],
-                'tanggal_akhir' => $data['tanggal_akhir'] ?? null,
+                'tanggal_mulai' => $this->normalizeDate($data['tanggal_mulai'] ?? null),
+                'tanggal_akhir' => $this->normalizeDate($data['tanggal_akhir'] ?? null),
             ]);
 
-            return $eSign->fresh();
+            $eSign = $eSign->fresh();
+
+            return $eSign;
         });
     }
+
+    /**
+     * Store a new multi-surat batch draft.
+     *
+     * Satu transaksi multi-surat menghasilkan N dokumen e_signs (satu per
+     * penerima) yang dikelompokkan dalam 1 ESignBatch.
+     *
+     * Contract data:
+     *   - recipients[] : array tiap elemen { employee_id, content, title? }
+     *     content sudah di-render client-side dengan data karyawan tsb.
+     *   - employee1_signee_id (opsional): HR/sign 1. Default: employee user login.
+     *   - letter_type_id, template_id, jenis_surat_slug, description,
+     *     tanggal_mulai, tanggal_akhir
+     *
+     * @param array $data
+     * @return \App\Models\ESignBatch
+     */
+    public function storeDraftBatch(array $data): ESignBatch
+    {
+        return DB::transaction(function () use ($data) {
+            $recipients = $data['recipients'] ?? [];
+            if (empty($recipients)) {
+                abort(422, 'Minimal harus ada 1 karyawan penerima untuk multi-surat.');
+            }
+
+            $sign1EmployeeId = $data['employee1_signee_id'] ?? Auth::user()->employee_id ?? null;
+
+            $batch = ESignBatch::create([
+                'jenis_surat_slug' => $data['jenis_surat_slug'],
+                'letter_type_id'   => $data['letter_type_id'] ?? null,
+                'template_id'      => $data['template_id'] ?? null,
+                'created_by'       => Auth::id(),
+                'total_recipients' => count($recipients),
+            ]);
+
+            $sub = 1;
+            foreach ($recipients as $r) {
+                $employeeId = (int) ($r['employee_id'] ?? 0);
+                if ($employeeId <= 0) {
+                    continue;
+                }
+
+                ESign::create([
+                    'employee_id'         => $employeeId,
+                    'employee1_signee_id' => $sign1EmployeeId,
+                    'employee2_signee_id' => $employeeId,
+                    'letter_type_id'      => $data['letter_type_id'] ?? null,
+                    'template_id'         => $data['template_id'] ?? null,
+                    'batch_id'            => $batch->id,
+                    'nomor_sub'           => $sub,
+                    'nomor_surat'         => null,
+                    'document_name'       => $r['title'] ?? $data['title'] ?? 'Draft Surat',
+                    'title'               => $r['title'] ?? $data['title'] ?? null,
+                    'content'             => $r['content'] ?? $data['content'] ?? '',
+                    'document_type'       => 'contract',
+                    'jenis_surat_slug'    => $data['jenis_surat_slug'],
+                    'description'         => $data['description'] ?? null,
+                    'document_path'       => '',
+                    'file_name'           => '',
+                    'file_size'           => 0,
+                    'status'              => ESign::STATUS_DRAFT,
+                    'created_by'          => Auth::id(),
+                    'upload_date'         => Carbon::now(),
+                    'tanggal_mulai'       => $this->normalizeDate($data['tanggal_mulai'] ?? null),
+                    'tanggal_akhir'       => $this->normalizeDate($data['tanggal_akhir'] ?? null),
+                ]);
+                $sub++;
+            }
+
+            $this->logService->logCurrentUser(
+                'insert',
+                $this->logService->buildDescription(
+                    'Buat Draft Multi-Surat pada menu E-Sign.',
+                    [],
+                    [
+                        'Jenis Surat' => $batch->jenis_surat_slug,
+                        'Jumlah Penerima' => (string) count($recipients),
+                        'Status' => 'draft',
+                    ]
+                )
+            );
+
+            return $batch->fresh('documents');
+        });
+    }
+
+    /**
+     * Update a multi-surat batch draft (masih status draft).
+     *
+     * Mensinkronkan daftar penerima & isi surat ke dokumen-dokumen batch.
+     * Dokumen lama yang tidak ada lagi di recipients akan dihapus; penerima
+     * baru akan dibuatkan dokumen.
+     *
+     * @param \App\Models\ESignBatch $batch
+     * @param array $data (contract sama seperti storeDraftBatch)
+     * @return \App\Models\ESignBatch
+     */
+    public function updateDraftBatch(ESignBatch $batch, array $data): ESignBatch
+    {
+        return DB::transaction(function () use ($batch, $data) {
+            $recipients = $data['recipients'] ?? [];
+            if (empty($recipients)) {
+                abort(422, 'Minimal harus ada 1 karyawan penerima untuk multi-surat.');
+            }
+
+            $sign1EmployeeId = $data['employee1_signee_id'] ?? Auth::user()->employee_id ?? null;
+
+            $existing = $batch->documents()->get()->keyBy('id');
+            $sub = 1;
+            $newDocIds = [];
+
+            foreach ($recipients as $r) {
+                $employeeId = (int) ($r['employee_id'] ?? 0);
+                if ($employeeId <= 0) {
+                    continue;
+                }
+
+                // Cari dokumen batch dengan employee yang sama
+                $doc = $batch->documents()->where('employee_id', $employeeId)->first();
+
+                if ($doc) {
+                    $doc->update([
+                        'employee1_signee_id' => $sign1EmployeeId,
+                        'content'             => $r['content'] ?? $doc->content,
+                        'title'               => $r['title'] ?? $doc->title,
+                        'document_name'       => $r['title'] ?? $doc->document_name,
+                        'nomor_sub'           => $sub,
+                        'tanggal_mulai'       => $this->normalizeDate($data['tanggal_mulai'] ?? null),
+                        'tanggal_akhir'       => $this->normalizeDate($data['tanggal_akhir'] ?? null),
+                    ]);
+                    $newDocIds[] = $doc->id;
+                } else {
+                    $doc = ESign::create([
+                        'employee_id'         => $employeeId,
+                        'employee1_signee_id' => $sign1EmployeeId,
+                        'employee2_signee_id' => $employeeId,
+                        'letter_type_id'      => $data['letter_type_id'] ?? $batch->letter_type_id,
+                        'template_id'         => $data['template_id'] ?? $batch->template_id,
+                        'batch_id'            => $batch->id,
+                        'nomor_sub'           => $sub,
+                        'nomor_surat'         => null,
+                        'document_name'       => $r['title'] ?? $data['title'] ?? 'Draft Surat',
+                        'title'               => $r['title'] ?? $data['title'] ?? null,
+                        'content'             => $r['content'] ?? $data['content'] ?? '',
+                        'document_type'       => 'contract',
+                        'jenis_surat_slug'    => $data['jenis_surat_slug'] ?? $batch->jenis_surat_slug,
+                        'description'         => $data['description'] ?? $batch->description ?? null,
+                        'document_path'       => '',
+                        'file_name'           => '',
+                        'file_size'           => 0,
+                        'status'              => ESign::STATUS_DRAFT,
+                        'created_by'          => Auth::id(),
+                        'upload_date'         => Carbon::now(),
+                        'tanggal_mulai'       => $this->normalizeDate($data['tanggal_mulai'] ?? null),
+                        'tanggal_akhir'       => $this->normalizeDate($data['tanggal_akhir'] ?? null),
+                    ]);
+                    $newDocIds[] = $doc->id;
+                }
+                $sub++;
+            }
+
+            // Hapus dokumen batch yang tidak ada lagi di recipients.
+            // Hanya dokumen berstatus Draft yang boleh dihapus; dokumen yang
+            // sudah diproses (sign/completed) tidak boleh ikut terhapus.
+            $batch->documents()
+                ->whereNotIn('id', $newDocIds)
+                ->where('status', ESign::STATUS_DRAFT)
+                ->delete();
+
+            $batch->update(['total_recipients' => count($newDocIds)]);
+
+            return $batch->fresh('documents');
+        });
+    }
+
+    /**
+     * Kirim batch multi-surat: generate nomor batch & status sign_1 untuk
+     * semua dokumen, lalu kirim notifikasi serentak ke HR (sign 1) dan ke
+     * semua karyawan penerima (sign 2).
+     *
+     * @param \App\Models\ESignBatch $batch
+     * @return \App\Models\ESignBatch
+     */
+    public function sendBatch(ESignBatch $batch): ESignBatch
+    {
+        if ($batch->nomor_surat) {
+            abort(403, 'Batch ini sudah dikirim.');
+        }
+
+        return DB::transaction(function () use ($batch) {
+            $docs = $batch->documents()->get();
+            if ($docs->isEmpty()) {
+                abort(422, 'Batch tidak memiliki dokumen untuk dikirim.');
+            }
+
+            // Generate nomor batch: {PREFIX}/{DEPT}/{BULAN}/{TAHUN}
+            $batchNumber = $this->numberService->generateNextBatchNumber($batch->jenis_surat_slug);
+
+            $batch->update(['nomor_surat' => $batchNumber]);
+
+            foreach ($docs as $doc) {
+                $doc->update([
+                    'nomor_surat' => $batchNumber . '/' . str_pad((string) $doc->nomor_sub, 3, '0', STR_PAD_LEFT),
+                    'status'      => ESign::STATUS_SIGN_1,
+                ]);
+                $doc = $doc->fresh();
+
+                // Notifikasi serentak: HR (sign 1) dan karyawan penerima (sign 2)
+                $this->sendSignNotification($doc, 1);
+                $this->sendSignNotification($doc, 2);
+            }
+
+            return $batch->fresh('documents');
+        });
+    }
+
 
     /**
      * Employee signs (approves) a document at the current sign level.
@@ -150,12 +395,109 @@ class ESignService
      */
     public function approveByEmployee(ESign $eSign, int $employeeId): ESign
     {
+        // ============================================================
+        // MULTI-SURAT (batch): tanda tangan paralel.
+        // HR (sign 1) & karyawan (sign 2) bisa tanda tangan kapan saja,
+        // tidak saling menunggu. Selesai saat keduanya sudah menandatangani.
+        // ============================================================
+        if ($eSign->batch_id) {
+            if ($eSign->employee1_signee_id == $employeeId && $eSign->employee1_signed_at) {
+                abort(403, 'Anda sudah menandatangani surat ini.');
+            }
+            if ($eSign->employee2_signee_id == $employeeId && $eSign->employee2_signed_at) {
+                abort(403, 'Anda sudah menandatangani surat ini.');
+            }
+            if ($eSign->employee1_signee_id != $employeeId && $eSign->employee2_signee_id != $employeeId) {
+                abort(403, 'Anda tidak terdaftar sebagai penandatangan surat ini.');
+            }
+
+            return DB::transaction(function () use ($eSign, $employeeId) {
+                $now = now();
+                $updateData = [];
+
+                if ($eSign->employee1_signee_id == $employeeId) {
+                    $updateData['employee1_signed_at'] = $now;
+                } else {
+                    $updateData['employee2_signed_at'] = $now;
+                }
+
+                $current = $eSign->fresh();
+                $s1 = $updateData['employee1_signed_at'] ?? $current->employee1_signed_at;
+                $s2 = $updateData['employee2_signed_at'] ?? $current->employee2_signed_at;
+
+                // Label status akurat: selesai hanya bila keduanya menandatangani,
+                // jika belum lengkap tampilkan pihak yang masih menunggu.
+                $updateData['status'] = ($s1 && $s2)
+                    ? ESign::STATUS_COMPLETED
+                    : ($s1 ? ESign::STATUS_SIGN_2 : ESign::STATUS_SIGN_1);
+
+                $eSign->update($updateData);
+                $eSign = $eSign->fresh();
+
+                // Ingatkan pihak yang masih belum menandatangani.
+                if ($updateData['status'] !== ESign::STATUS_COMPLETED) {
+                    $this->sendSignNotification($eSign, $s1 ? 2 : 1);
+                }
+
+                return $eSign;
+            });
+        }
+
+        // ============================================================
+        // Surat tunggal TANDA TANGAN PARALEL (kirim via "Langsung Kirim").
+        // Sign 1 & Sign 2 bisa tanda tangan kapan saja; selesai saat keduanya sdh tandatangan.
+        // ============================================================
+        if ($eSign->is_parallel_sign) {
+            if ($eSign->employee1_signee_id == $employeeId && $eSign->employee1_signed_at) {
+                abort(403, 'Anda sudah menandatangani surat ini.');
+            }
+            if ($eSign->employee2_signee_id == $employeeId && $eSign->employee2_signed_at) {
+                abort(403, 'Anda sudah menandatangani surat ini.');
+            }
+            if ($eSign->employee1_signee_id != $employeeId && $eSign->employee2_signee_id != $employeeId) {
+                abort(403, 'Anda tidak terdaftar sebagai penandatangan surat ini.');
+            }
+
+            return DB::transaction(function () use ($eSign, $employeeId) {
+                $now = now();
+                $updateData = [];
+
+                if ($eSign->employee1_signee_id == $employeeId) {
+                    $updateData['employee1_signed_at'] = $now;
+                } else {
+                    $updateData['employee2_signed_at'] = $now;
+                }
+
+                $current = $eSign->fresh();
+                $s1 = $updateData['employee1_signed_at'] ?? $current->employee1_signed_at;
+                $s2 = $updateData['employee2_signed_at'] ?? $current->employee2_signed_at;
+
+                // Label status akurat: selesai hanya bila keduanya menandatangani,
+                // jika belum lengkap tampilkan pihak yang masih menunggu.
+                $updateData['status'] = ($s1 && $s2)
+                    ? ESign::STATUS_COMPLETED
+                    : ($s1 ? ESign::STATUS_SIGN_2 : ESign::STATUS_SIGN_1);
+
+                $eSign->update($updateData);
+                $eSign = $eSign->fresh();
+
+                // Ingatkan pihak yang masih belum menandatangani.
+                if ($updateData['status'] !== ESign::STATUS_COMPLETED) {
+                    $this->sendSignNotification($eSign, $s1 ? 2 : 1);
+                }
+
+                return $eSign;
+            });
+        }
+
+        // Surat tunggal: hanya giliran yang bisa menandatangani
         if (!$eSign->canBeResponded($employeeId)) {
             abort(403, 'Anda tidak berhak menandatangani surat ini saat ini.');
         }
 
-        return DB::transaction(function () use ($eSign) {
+        return DB::transaction(function () use ($eSign, $employeeId) {
             $now = now();
+
             $currentLevel = $eSign->getCurrentSignLevel();
 
             $updateData = [];
@@ -241,17 +583,126 @@ class ESignService
     }
 
     /**
-     * Employee rejects a document (optional — not used in current flow).
+     * Kirim draft surat tunggal sekaligus ke Sign 1 & Sign 2.
+     *
+     * Dipakai tombol "Langsung Kirim ke Employee" pada editor surat.
+     * Men-generate nomor surat, set status sign_1, lalu mengirim email ke
+     * penandatangan pertama (Sign 1) dan kedua (Sign 2) sekaligus, sehingga
+     * keduanya melihat surat pada menu "sign employe" masing-masing.
      */
-    public function rejectByEmployee(ESign $eSign): ESign
+    public function sendSingleToBoth(ESign $eSign): ESign
     {
-        if (!$eSign->canBeResponded($eSign->getCurrentSigneeId() ?? 0)) {
-            abort(403, 'Dokumen ini tidak bisa di-reject.');
+        if (!$eSign->canBeSent()) {
+            abort(403, 'Hanya dokumen dengan status Draft yang dapat dikirim ke Employee.');
+        }
+
+        return DB::transaction(function () use ($eSign) {
+            // Generate nomor surat otomatis
+            $nomorSurat = $this->numberService->generateNextNumber($eSign->jenis_surat_slug);
+
+            $eSign->update([
+                'nomor_surat' => $nomorSurat,
+                'status' => ESign::STATUS_SIGN_1,
+                'is_parallel_sign' => true,
+            ]);
+
+            $eSign = $eSign->fresh();
+
+            // Kirim email ke Sign 1 & Sign 2
+            $this->sendSignNotification($eSign, 1);
+            $this->sendSignNotification($eSign, 2);
+
+            return $eSign;
+        });
+    }
+
+    /**
+     * Employee rejects a document.
+     * Hanya penandatangan yang berhak menolak (identitas dari user yang login),
+     * konsisten dengan logika otorisasi pada approveByEmployee().
+     */
+    public function rejectByEmployee(ESign $eSign, int $employeeId): ESign
+    {
+        // Batch (multi-surat) / paralel: penolak harus Sign 1 atau Sign 2.
+        if ($eSign->batch_id || $eSign->is_parallel_sign) {
+            $isSignee = in_array($employeeId, [
+                $eSign->employee1_signee_id,
+                $eSign->employee2_signee_id,
+            ], true);
+
+            if (!$isSignee) {
+                abort(403, 'Anda tidak terdaftar sebagai penandatangan surat ini.');
+            }
+        }
+        // Surat tunggal berurutan: hanya giliran yang boleh menolak.
+        elseif (!$eSign->canBeResponded($employeeId)) {
+            abort(403, 'Anda tidak berhak menolak surat ini saat ini.');
         }
 
         return DB::transaction(function () use ($eSign) {
             $eSign->update(['status' => ESign::STATUS_REJECTED_EMPLOYEE]);
+
             return $eSign->fresh();
         });
+    }
+
+    /**
+     * Normalize an incoming date string into a DB-safe 'Y-m-d' format.
+     *
+     * Datepicker & field tanggal dikirim dalam format id-ID (mis. "03 Agustus 2026"
+     * atau "3 Agustus 2026"), sementara kolom di DB bertipe date. Konversi ini
+     * mencegah error "Could not parse ... Failed to parse time string".
+     *
+     * Format yang dikenali:
+     * - "2026-08-03"           (sudah format DB)
+     * - "03/08/2026" / "3/8/2026"
+     * - "03 Agustus 2026"      (id-ID, dengan/tanpa leading zero)
+     *
+     * @param mixed $value
+     * @return string|null
+     */
+    private function normalizeDate($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        // Sudah dalam format Y-m-d
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $value;
+        }
+
+        // Format n/j/Y atau dd/mm/YYYY
+        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})$#', $value, $m)) {
+            return sprintf('%04d-%02d-%02d', (int) $m[3], (int) $m[2], (int) $m[1]);
+        }
+
+        // Format id-ID: "03 Agustus 2026"
+        $indonesianMonths = [
+            'januari' => 1, 'februari' => 2, 'maret' => 3, 'april' => 4,
+            'mei' => 5, 'juni' => 6, 'juli' => 7, 'agustus' => 8,
+            'september' => 9, 'oktober' => 10, 'november' => 11, 'desember' => 12,
+        ];
+        if (preg_match('#^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})$#', $value, $m)) {
+            $month = strtolower($m[2]);
+            if (isset($indonesianMonths[$month])) {
+                return sprintf('%04d-%02d-%02d', (int) $m[3], $indonesianMonths[$month], (int) $m[1]);
+            }
+            // Bulan Inggris fallback
+            try {
+                return Carbon::parse($value)->format('Y-m-d');
+            } catch (\Throwable $e) {
+                return null;
+            }
+        }
+
+        // Fallback: coba parse otomatis
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }

@@ -19,87 +19,89 @@
     .editor-a4-wrapper {
         background: #e8eaed;
         border-radius: 12px;
-        padding: 2rem 1rem;
+        padding: 2rem 1rem 0.5rem;
         display: flex;
         justify-content: center;
     }
 
-    /* Toolbar sticky */
-    .editor-a4-wrapper .ck-editor__top {
-        position: sticky;
-        top: 0;
-        z-index: 50;
+    /* Container editor RoosterJS — susun toolbar & kertas ke tengah */
+    .editor-a4-wrapper .rooster-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
     }
 
-    /* Area editable — seperti halaman A4 */
-    .editor-a4-wrapper .ck-editor__editable {
+    /* Toolbar selebar A4 — sticky di bawah header (70px) agar tetap terlihat saat scroll */
+    .editor-a4-wrapper .rooster-toolbar {
+        width: 210mm;
+        max-width: 100%;
+        position: sticky;
+        top: 70px;
+        z-index: 1000;
+    }
+
+    /* Area editable — seperti halaman kertas A4 */
+    /* Padding default 1cm 2.5cm, akan di-override JS (termasuk area kop & page-break) */
+    .editor-a4-wrapper .rooster-editable {
         background: #ffffff !important;
         width: 210mm !important;
-        min-height: 700px !important;
+        max-width: 100% !important;
+        min-height: 297mm !important;
         max-height: none !important;
-        padding: 2cm 2.5cm !important;
+        padding: 1cm 2.5cm 2cm 2.5cm !important;
         margin: 0 auto !important;
         box-shadow: 0 2px 12px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06) !important;
         border: none !important;
+        border-top: none !important;
         font-family: Calibri, Arial, sans-serif !important;
         font-size: 12pt !important;
         line-height: 1.5 !important;
     }
 
-    /* Paragraph spacing untuk surat resmi */
-    .editor-a4-wrapper .ck-editor__editable p {
-        margin: 0 0 0.75em 0 !important;
+    /* Paragraph spacing untuk surat resmi — seperti Word */
+    .editor-a4-wrapper .rooster-editable p {
+        margin: 0 0 0.35em 0 !important;
         padding: 0 !important;
+        line-height: 1.5 !important;
     }
 
-    /* Heading dalam surar */
-    .editor-a4-wrapper .ck-editor__editable h1,
-    .editor-a4-wrapper .ck-editor__editable h2,
-    .editor-a4-wrapper .ck-editor__editable h3,
-    .editor-a4-wrapper .ck-editor__editable h4,
-    .editor-a4-wrapper .ck-editor__editable h5 {
+    /* Heading dalam surat — spacing rapat seperti Word */
+    .editor-a4-wrapper .rooster-editable h1,
+    .editor-a4-wrapper .rooster-editable h2,
+    .editor-a4-wrapper .rooster-editable h3,
+    .editor-a4-wrapper .rooster-editable h4,
+    .editor-a4-wrapper .rooster-editable h5 {
         font-family: Calibri, Arial, sans-serif !important;
-    }
-
-    /* Hilangkan border default CKEditor */
-    .editor-a4-wrapper .ck.ck-editor__editable_inline {
-        border: none !important;
+        margin: 0.5em 0 0.25em 0 !important;
+        line-height: 1.3 !important;
     }
 
     /* Table styling — seperti Word */
-    .editor-a4-wrapper .ck-editor__editable figure.table {
-        width: 100% !important;
-        margin: 12px 0 !important;
-    }
-    .editor-a4-wrapper .ck-editor__editable figure.table table {
+    .editor-a4-wrapper .rooster-editable table {
         width: 100% !important;
         border-collapse: collapse !important;
         font-size: 11pt !important;
     }
-    .editor-a4-wrapper .ck-editor__editable figure.table table td,
-    .editor-a4-wrapper .ck-editor__editable figure.table table th {
+    .editor-a4-wrapper .rooster-editable table td,
+    .editor-a4-wrapper .rooster-editable table th {
         border: 1px solid #212529 !important;
         padding: 6px 8px !important;
         vertical-align: top !important;
     }
-    .editor-a4-wrapper .ck-editor__editable figure.table table th {
+    .editor-a4-wrapper .rooster-editable table th {
         background: #f0f0f0 !important;
         font-weight: 700 !important;
     }
 
-    /* Pastikan toolbar rapi */
-    .editor-a4-wrapper .ck.ck-toolbar {
-        border: none !important;
-        border-bottom: 1px solid #dadce0 !important;
-        border-radius: 8px 8px 0 0 !important;
-        background: #f8f9fa !important;
-    }
-
     /* Responsive: jika layar kurang dari 210mm, gunakan lebar penuh */
     @media (max-width: 900px) {
-        .editor-a4-wrapper .ck-editor__editable {
+        .editor-a4-wrapper .rooster-editable {
             width: 100% !important;
             padding: 1.5cm 1.5cm !important;
+        }
+        .editor-a4-wrapper .rooster-toolbar {
+            width: 100% !important;
         }
     }
 
@@ -109,6 +111,7 @@
     .preview-a4-page {
         background: #ffffff;
         width: 210mm;
+        box-sizing: border-box;
         min-height: 297mm;
         overflow: hidden;
         position: relative;
@@ -150,6 +153,24 @@
         background: #f0f0f0 !important;
         font-weight: 700 !important;
     }
+    /* Pemisah antar kertas (page break) */
+    .preview-page-break {
+        width: 70%;
+        max-width: 420px;
+        margin: 3rem auto 3rem auto;
+        border-top: 2px dashed #cbd5e1;
+        flex-shrink: 0;
+    }
+    /* Nomor halaman di pojok kanan bawah tiap kertas */
+    .preview-page-number {
+        position: absolute;
+        bottom: 0.35cm;
+        right: 1cm;
+        font-size: 10pt;
+        font-weight: 600;
+        color: #6b7280;
+        font-family: Calibri, Arial, sans-serif;
+    }
 
     /* Kop surat (letterhead) — gambar penuh */
     .preview-kop {
@@ -165,6 +186,28 @@
         margin: 0 auto;
     }
 
+    /* Kop + judul + nomor pada preview — disamakan dengan preview editor surat */
+    .company-header {
+        text-align: center;
+        margin-bottom: 6px;
+    }
+    .doc-title {
+        text-align: center;
+        font-size: 16px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 4px 0 2px 0;
+        color: #1e293b;
+    }
+    .doc-number {
+        text-align: center;
+        font-size: 12px;
+        color: #6c757d;
+        margin: 0 0 24px 0;
+        font-weight: 500;
+    }
+
     /* Placeholder highlight */
     .preview-placeholder {
         display: inline-block;
@@ -175,6 +218,47 @@
         font-family: "Courier New", monospace;
         font-size: 11pt;
         border: 1px dashed #ffc107;
+    }
+
+    /* Gambaran area tanda tangan di preview */
+    .preview-sign-placeholder {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+        width: 100%;
+        page-break-inside: avoid;
+    }
+    .editor-sign-slot {
+        display: flex;
+        justify-content: center;
+    }
+    .editor-sign-box {
+        width: 170px;
+        padding: 10px;
+        border: 1px dashed #adb5bd;
+        border-radius: 8px;
+        text-align: center;
+        background: #ffffff;
+    }
+    .editor-sign-box-label {
+        font-weight: 700;
+        font-size: 11pt;
+        color: #1e293b;
+        margin-bottom: 6px;
+    }
+    .editor-sign-box-qr {
+        width: 110px;
+        height: 70px;
+        border: 2px dashed #adb5bd;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 6px;
+        font-size: 9px;
+        color: #adb5bd;
+        background: #ffffff;
     }
 
     /* ============================================================
@@ -269,6 +353,9 @@
 <form action="{{ route('e-sign.templates.store') }}" method="POST">
     @csrf
     <input type="hidden" name="template_type" value="editor">
+    <input type="hidden" name="sign_1" id="inputSign1" value="1">
+    <input type="hidden" name="sign_2" id="inputSign2" value="0">
+    <input type="hidden" name="sign_3" id="inputSign3" value="0">
     <!-- Baris 1: Informasi Template -->
     <div class="row mb-4">
         <div class="col-lg-8">
@@ -431,15 +518,18 @@
                     <div class="mb-3">
                         <div class="placeholder-group-title"><i class="ri-pencil-line me-1"></i> Tanda Tangan</div>
                         <div class="d-flex flex-wrap gap-1">
-                            <button type="button" class="btn btn-outline-primary" style="font-size:11px;padding:1px 10px;" onclick="insertPH('sign_employee1')">
+                            <button type="button" class="btn btn-outline-primary sign-toggle-btn" data-sign="1" style="font-size:11px;padding:1px 10px;">
                                 <i class="ri-pencil-line"></i> Sign 1
                             </button>
-                            <button type="button" class="btn btn-outline-primary" style="font-size:11px;padding:1px 10px;" onclick="insertPH('sign_employee2')">
+                            <button type="button" class="btn btn-outline-primary sign-toggle-btn" data-sign="2" style="font-size:11px;padding:1px 10px;">
                                 <i class="ri-pencil-line"></i> Sign 2
                             </button>
-                            <button type="button" class="btn btn-outline-primary" style="font-size:11px;padding:1px 10px;" onclick="insertPH('sign_employee3')">
+                            <button type="button" class="btn btn-outline-primary sign-toggle-btn" data-sign="3" style="font-size:11px;padding:1px 10px;">
                                 <i class="ri-pencil-line"></i> Sign 3
                             </button>
+                        </div>
+                        <div class="text-muted mt-2" style="font-size:11px;">
+                            Klik untuk mengaktifkan/nonaktifkan slot tanda tangan.
                         </div>
                     </div>
 
@@ -468,7 +558,7 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body" style="background:#e8eaed;padding:2rem;">
-                            <div style="display:flex;justify-content:center;">
+                            <div style="display:flex;flex-direction:column;align-items:center;">
                                 <div class="preview-a4-page" id="previewModalBody">
                                     <div class="text-center text-muted py-5">
                                         <i class="ri-loader-2-line fs-1"></i>
@@ -492,7 +582,8 @@
 @endsection
 
 @section('javascript')
-@vite('resources/js/ckeditor.js')
+<script>window.ESIGN_KOP_URL = "{{ url('') }}/assets/images/KOP-terbaru.png";</script>
+@vite('resources/js/rooster-editor.js')
 <script>
     const empDbFields = @json($allEmployeeFields);
     let currentEmpNum = 1;
@@ -597,77 +688,186 @@
         insertPlaceholder(a + key + b);
     }
 
+    // ---- Toggle slot tanda tangan ----
+    function updateSignButtons() {
+        document.querySelectorAll('.sign-toggle-btn').forEach(function(btn) {
+            var n = btn.dataset.sign;
+            var input = document.getElementById('inputSign' + n);
+            var active = input.value === '1';
+            btn.classList.toggle('btn-primary', active);
+            btn.classList.toggle('btn-outline-primary', !active);
+        });
+    }
+    document.querySelectorAll('.sign-toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var n = btn.dataset.sign;
+            var input = document.getElementById('inputSign' + n);
+            input.value = input.value === '1' ? '0' : '1';
+            updateSignButtons();
+            if (window.refreshEditorSignPlaceholder) window.refreshEditorSignPlaceholder();
+        });
+    });
+    updateSignButtons();
+
+    // Bangun HTML slot tanda tangan pada preview sesuai sign aktif
+    function buildPreviewSignatureHtml() {
+        var active = [];
+        if (document.getElementById('inputSign1')?.value === '1') active.push(1);
+        if (document.getElementById('inputSign2')?.value === '1') active.push(2);
+        if (document.getElementById('inputSign3')?.value === '1') active.push(3);
+        function box(label) {
+            return '<div class="editor-sign-box">' +
+                '<div class="editor-sign-box-label">' + label + '</div>' +
+                '<div class="editor-sign-box-qr">QR Code<br>Digital Signature</div>' +
+                '</div>';
+        }
+        var left = active.indexOf(2) !== -1 ? box('Sign 2') : '';
+        var center = active.indexOf(3) !== -1 ? box('Sign 3') : '';
+        var right = active.indexOf(1) !== -1 ? box('Sign 1') : '';
+        return '<div class="preview-sign-placeholder">' +
+            '<div class="editor-sign-slot">' + left + '</div>' +
+            '<div class="editor-sign-slot">' + center + '</div>' +
+            '<div class="editor-sign-slot">' + right + '</div>' +
+            '</div>';
+    }
+
     // Preview Template
     document.getElementById('btnPreviewTemplate').addEventListener('click', function() {
         var content = '';
-        if (window.ckEditorInstance) {
-            content = window.ckEditorInstance.getData();
+        if (window.getRoosterContent) {
+            content = window.getRoosterContent();
+        } else if (window.roosterEditor) {
+            content = window.getRoosterContent();
         } else {
             content = document.getElementById('templateContent').value;
         }
         if (!content.trim()) { alert('Template masih kosong.'); return; }
 
-        var preview = content;
-        var openB = '{' + '{';
-        var closeB = '}' + '}';
-        var repl = [
-            ['employee1_fullname', 'John Doe'], ['employee1_nik', 'NIK. 123456789'],
-            ['employee1_position', 'Manager'], ['employee1_department', 'HRD'],
-            ['employee_name', 'John Doe'], ['employee_nik', 'NIK. 123456789'],
-            ['employee_position', 'Manager'], ['employee_department', 'HRD'],
-            ['tanggal_1', '01 Januari 2026'], ['tanggal_2', '01 Januari 2026'],
-            ['tanggal_mulai', '01 Januari 2026'], ['tanggal_akhir', '31 Desember 2026'],
-            ['today', '23 Juli 2026'], ['judul_surat', 'Contoh Judul Surat'],
-            ['nomor_surat', 'XXX/2026/001'],
-            ['sign_employee1', '[Tanda Tangan]'], ['sign_employee2', '[Tanda Tangan]'], ['sign_employee3', '[Tanda Tangan]'],
-        ];
-        for (var r = 0; r < repl.length; r++) {
-            var re = new RegExp(openB + repl[r][0] + closeB, 'g');
-            preview = preview.replace(re, repl[r][1]);
-        }
-
-        // Highlight sisa placeholder yang belum diganti
-        var reCatch = new RegExp('(' + openB + '[a-z0-9_]+' + closeB + ')', 'g');
-        preview = preview.replace(reCatch, '<span class="preview-placeholder">$1</span>');
-
-        // Kop surat + judul
+        // Kop surat (letterhead) + judul + nomor — sama dengan preview editor surat.
+        // Kop berulang di tiap halaman; judul & nomor hanya di halaman pertama.
         var logoUrl = '{{ url('') }}/assets/images/KOP-terbaru.png';
+        var judulTxt = 'Judul Surat';
         var fullHtml =
-            '<div class="preview-kop"><img src="' + logoUrl + '" alt="Kop Surat" class="kop-img-full"></div>' +
-            '<div style="text-align:center;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;color:#1e293b;">{{ $selectedType->name ?? 'Judul Surat' }}</div>' +
-            '<div style="text-align:center;font-size:12px;color:#6c757d;margin-bottom:28px;font-weight:500;">Nomor: _______________</div>' +
-            preview;
+            '<div class="company-header"><img src="' + logoUrl + '" alt="Kop Surat" class="kop-img-full"></div>' +
+            '<div class="doc-title">' + judulTxt + '</div>' +
+            '<div class="doc-number">Nomor: _______________</div>' +
+            content +
+            buildPreviewSignatureHtml();
+
+        // Highlight placeholder — konsisten dengan preview lain agar page break sama
+        fullHtml = fullHtml.replace(/\{\{(\w+)\}\}/g, '<span class="preview-placeholder">@{{$1}}</span>');
 
         var wrapper = document.getElementById('previewModalBody');
+        // Margin sama dengan preview editor surat (1cm 2.5cm 2cm 2.5cm)
+        wrapper.style.padding = '1cm 2.5cm 2cm 2.5cm';
         wrapper.innerHTML = fullHtml;
-
-        // Pagination jika konten lebih dari 1 halaman A4
-        var maxH = 297 * 3.78;
-        var allPages = [wrapper];
-        var pageIndex = 0;
-        while (pageIndex < allPages.length) {
-            var curr = allPages[pageIndex];
-            var safety = 0;
-            while (curr.scrollHeight > maxH + 5 && safety < 50) {
-                safety++;
-                var kids = curr.children;
-                if (kids.length <= 1) break;
-                var last = kids[kids.length - 1];
-                var next = allPages[pageIndex + 1];
-                if (!next) {
-                    next = document.createElement('div');
-                    next.className = 'preview-a4-page';
-                    next.style.marginTop = '0';
-                    curr.parentNode.insertBefore(next, curr.nextSibling);
-                    allPages.push(next);
-                }
-                next.insertBefore(last, next.firstChild);
-            }
-            pageIndex++;
-        }
 
         var modal = new bootstrap.Modal(document.getElementById('previewModal'));
         modal.show();
     });
+
+    // Paginasi preview SETELAH modal tampil (agar tinggi halaman terukur benar),
+    // menunggu gambar (KOP) selesai dimuat dulu. Disamakan dengan preview editor surat:
+    // kop berulang di tiap halaman, judul/nomor di halaman 1.
+    function doTemplatePagination(wrapper) {
+        var source = document.createElement('div');
+        while (wrapper.firstChild) source.appendChild(wrapper.firstChild);
+
+        // Pisahkan kop (berulang tiap halaman) serta judul & nomor (halaman 1 saja)
+        var kopEl = null, titleEl = null, numEl = null, hasKop = false;
+        var k = source.querySelector('.company-header');
+        if (k) { kopEl = k; k.parentNode.removeChild(k); hasKop = true; }
+        var t = source.querySelector('.doc-title'); if (t) titleEl = t;
+        var n = source.querySelector('.doc-number'); if (n) numEl = n;
+        var sig = source.querySelector('.preview-sign-placeholder');
+        if (sig) sig.parentNode.removeChild(sig);
+
+        // Halaman pertama = wrapper
+        wrapper.innerHTML = '';
+        if (hasKop) wrapper.appendChild(kopEl.cloneNode(true));
+        if (titleEl) wrapper.appendChild(titleEl);
+        if (numEl) wrapper.appendChild(numEl);
+
+        var maxH = 297 * 3.78;
+        var allPages = [wrapper];
+        var pageIndex = 0;
+
+        var nodes = Array.prototype.slice.call(source.childNodes);
+        for (var i = 0; i < nodes.length; i++) wrapper.appendChild(nodes[i]);
+
+        function makeNext(curr) {
+            var np = document.createElement('div');
+            np.className = 'preview-a4-page';
+            np.style.padding = wrapper.style.padding;
+            np.style.marginTop = '0';
+            curr.parentNode.insertBefore(np, curr.nextSibling);
+            var brk = document.createElement('div');
+            brk.className = 'preview-page-break';
+            curr.parentNode.insertBefore(brk, np);
+            // Halaman berikutnya diawali kop surat
+            if (hasKop) np.appendChild(kopEl.cloneNode(true));
+            allPages.push(np);
+            return np;
+        }
+
+        while (pageIndex < allPages.length) {
+            var cur = allPages[pageIndex];
+            var safety = 0;
+            while (cur.scrollHeight > maxH + 5 && safety < 50) {
+                safety++;
+                var kids = cur.children;
+                if (kids.length <= 1) break;
+                var last = kids[kids.length - 1];
+                var next = allPages[pageIndex + 1] || makeNext(cur);
+                // Sisipkan di awal konten (setelah kop) agar urutan tetap benar
+                var ib = next.children[hasKop ? 1 : 0];
+                if (ib) next.insertBefore(last, ib); else next.appendChild(last);
+            }
+            pageIndex++;
+        }
+
+        // Tempel area tanda tangan di halaman terakhir (bawah)
+        if (sig) {
+            var lastPage = allPages[allPages.length - 1];
+            lastPage.appendChild(sig);
+            if (lastPage.scrollHeight > maxH + 5) {
+                lastPage.removeChild(sig);
+                var fresh = makeNext(lastPage);
+                fresh.appendChild(sig);
+            }
+        }
+
+        // Nomor halaman di pojok kanan bawah tiap kertas
+        allPages.forEach(function(pg, idx) {
+            var existing = pg.querySelector('.preview-page-number');
+            if (existing) existing.remove();
+            var num = document.createElement('div');
+            num.className = 'preview-page-number';
+            num.textContent = (idx + 1) + ' / ' + allPages.length;
+            pg.appendChild(num);
+        });
+    }
+
+    function paginateTemplatePreview() {
+        var wrapper = document.getElementById('previewModalBody');
+        if (!wrapper) return;
+        // Hapus halaman & page break dari preview sebelumnya
+        var parent = wrapper.parentNode;
+        parent.querySelectorAll('.preview-a4-page').forEach(function(p, i) { if (i > 0) p.remove(); });
+        parent.querySelectorAll('.preview-page-break').forEach(function(b) { b.remove(); });
+        // Tunggu gambar (KOP) selesai dimuat agar tinggi akurat
+        var imgs = wrapper.querySelectorAll('img');
+        if (imgs.length === 0) {
+            doTemplatePagination(wrapper);
+        } else {
+            var total = imgs.length, loaded = 0;
+            imgs.forEach(function(img) {
+                if (img.complete) { loaded++; if (loaded >= total) doTemplatePagination(wrapper); }
+                else { img.onload = function() { loaded++; if (loaded >= total) doTemplatePagination(wrapper); }; }
+            });
+        }
+    }
+
+    $('#previewModal').on('shown.bs.modal', paginateTemplatePreview);
 </script>
 @endsection

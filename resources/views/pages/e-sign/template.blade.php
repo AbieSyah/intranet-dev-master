@@ -14,24 +14,77 @@
             justify-content: center;
         }
         .doc-preview {
-            background: #fff;
             width: 100%;
             max-width: 800px;
-            min-height: 1050px;
-            padding: 60px 56px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+            margin: 0 auto;
+            padding: 0;
+        }
+        /* Halaman A4 pada preview editor — disamakan persis dengan ikon preview surat */
+        .doc-preview-page {
+            background: #ffffff;
+            width: 210mm;
+            min-height: 297mm;
+            position: relative;
+            margin: 0 auto 1.5em auto;
+            padding: 1cm 2.5cm 2cm 2.5cm;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
             border: 1px solid #dee2e6;
             border-radius: 4px;
-            font-size: 13px;
-            line-height: 1.7;
+            font-family: Calibri, Arial, sans-serif;
+            font-size: 12pt;
+            line-height: 1.5;
             color: #212529;
+        }
+        /* Pemisah antar kertas */
+        .preview-page-break {
+            width: 70%;
+            max-width: 420px;
+            margin: 4rem auto 4.5rem auto;
+            border-top: 2px dashed #cbd5e1;
+            flex-shrink: 0;
+        }
+        /* Nomor halaman "X / Y" di pojok kanan bawah tiap kertas */
+        .preview-page-number {
+            position: absolute;
+            bottom: 0.35cm;
+            right: 1cm;
+            font-size: 10pt;
+            font-weight: 600;
+            color: #6b7280;
+            font-family: Calibri, Arial, sans-serif;
+        }
+        .doc-preview p {
+            margin: 0 0 0.75em 0;
+            padding: 0;
+        }
+        .doc-preview h1,
+        .doc-preview h2,
+        .doc-preview h3,
+        .doc-preview h4,
+        .doc-preview h5 {
+            font-family: Calibri, Arial, sans-serif;
+        }
+        .doc-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11pt;
+        }
+        .doc-preview table td,
+        .doc-preview table th {
+            border: 1px solid #212529;
+            padding: 6px 8px;
+            vertical-align: top;
+        }
+        .doc-preview table th {
+            background: #f0f0f0;
+            font-weight: 700;
         }
         .doc-preview .company-header {
             text-align: center;
-            margin-left: -56px;
-            margin-right: -56px;
+            margin-left: -0.8cm;
+            margin-right: -0.8cm;
             margin-bottom: 6px;
-            margin-top: -36px;
+            margin-top: -0.6cm;
         }
         .doc-preview .company-header img {
             width: 85%;
@@ -56,6 +109,13 @@
             font-weight: 500;
         }
         /* Right panel */
+        .side-panel {
+            position: sticky;
+            top: 88px;
+            align-self: flex-start;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
         .side-panel .card {
             border-radius: 12px;
             border: none;
@@ -173,15 +233,18 @@
                 <i class="ri-file-info-line me-1"></i> Data Surat
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ $mode === 'edit' ? route('e-sign.update', $doc->id) : route('e-sign.store') }}" id="formDraft">
+                <form method="POST" action="@if($mode === 'edit') {{ route('e-sign.update', $doc->id) }} @elseif($mode === 'edit-batch') {{ route('e-sign.batch.update', $batch->id) }} @else {{ route('e-sign.store') }} @endif" id="formDraft">
                     @csrf
-                    @if($mode === 'edit')
+                    @if($mode === 'edit' || $mode === 'edit-batch')
                     @method('PUT')
                     @endif
                     <input type="hidden" name="jenis_surat_slug" value="{{ $data['slug'] }}">
                     <input type="hidden" name="document_name" value="{{ $data['title'] }}">
                     <input type="hidden" name="letter_type_id" value="{{ $type->id ?? '' }}">
                     <input type="hidden" name="template_id" id="inputTemplateId" value="{{ $activeTemplate->id ?? '' }}">
+                    @if($mode === 'edit-batch')
+                    <input type="hidden" name="batch_id" id="inputBatchId" value="{{ $batch->id }}">
+                    @endif
                     <textarea name="content" style="display:none;" id="inputContent"></textarea>
 
                     {{-- Hidden inputs untuk employee_id per sign --}}
@@ -189,13 +252,77 @@
                     <input type="hidden" name="employee1_signee_id" id="inputEmployee1Id" value="">
                     <input type="hidden" name="employee2_signee_id" id="inputEmployee2Id" value="">
                     <input type="hidden" name="employee3_signee_id" id="inputEmployee3Id" value="">
+                    <input type="hidden" name="multi_surat" id="inputMultiSurat" value="{{ $mode === 'edit-batch' ? '1' : '0' }}">
+                    <input type="hidden" name="send_now" id="inputSendNow" value="0">
+
+                    {{-- Toggle Multisurat --}}
+                    <div class="mb-3 p-2 rounded border {{ in_array($mode, ['create','edit-batch']) ? '' : 'bg-light' }}" style="{{ in_array($mode, ['create','edit-batch']) ? 'border-color:#dee2e6;' : '' }}">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="toggleMultiSurat" @if($mode === 'create' || $mode === 'edit-batch') {{ $mode === 'edit-batch' ? 'checked' : '' }} @else disabled @endif>
+                            <label class="form-check-label fw-semibold" for="toggleMultiSurat">Multisurat</label>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            {{ in_array($mode, ['create','edit-batch']) ? 'Kirim 1 surat ke banyak karyawan sekaligus (tiap karyawan mendapat salinan dengan datanya sendiri).' : 'Mode multisurat hanya tersedia saat membuat surat baru.' }}
+                        </small>
+                        <div class="alert alert-info py-2 mt-2 mb-0" id="multiHint" style="{{ $mode === 'edit-batch' ? '' : 'display:none;' }}font-size:12px;">
+                            <i class="ri-stack-line me-1"></i>
+                            Mode multisurat aktif. Pilih beberapa karyawan sebagai penerima — preview akan menampilkan surat untuk tiap karyawan.
+                        </div>
+                        <div class="form-check form-switch mt-2" style="display:none;">
+                            <input class="form-check-input" type="checkbox" id="toggleSign2Recipient" checked>
+                            <label class="form-check-label fw-semibold" for="toggleSign2Recipient">Sign 2 = Penerima (multisurat)</label>
+                        </div>
+                        <small class="text-muted d-block mt-1" style="display:none;font-size:12px;">
+                            Saat aktif, pada multisurat tiap salinan menampilkan penerimanya sebagai Sign 2.
+                        </small>
+                    </div>
 
                     {{-- Pilih Employee (multiple) --}}
-                    <div class="mb-3">
-                        <label class="form-label">Pilih Employee <small class="text-muted">(bisa pilih lebih dari 1)</small></label>
+                    <div class="mb-3" id="singleEmployeeWrap">
+                        <label class="form-label">Pilih Employee</label>
                         <select name="employee_id" class="form-control" id="selectEmployee" style="width: 100%;" multiple>
                             @foreach($employees as $emp)
+                            @php
+                                $empJson = [
+                                    'nik' => $emp->nik, 'no_ktp' => $emp->no_ktp,
+                                    'fullname' => $emp->fullname, 'email' => $emp->email,
+                                    'addressktp' => $emp->addressktp, 'birthplace' => $emp->birthplace,
+                                    'birthdate' => $emp->birthdate, 'gender' => $emp->gender,
+                                    'religion' => $emp->religion, 'marital' => $emp->marital,
+                                    'hp' => $emp->hp, 'joindate' => $emp->joindate,
+                                    'enddate' => $emp->enddate, 'status' => $emp->status,
+                                    'work_location' => $emp->work_location,
+                                    'domicile_address' => $emp->domicile_address,
+                                    'emergency_contact' => $emp->emergency_contact,
+                                    'emergency_contact_relation' => $emp->emergency_contact_relation,
+                                    'emergency_contact_handphone' => $emp->emergency_contact_handphone,
+                                    'emergency_contact_address' => $emp->emergency_contact_address,
+                                    'permanent_startdate' => $emp->permanent_startdate,
+                                    'iso_position' => $emp->iso_position, 'cost_center' => $emp->cost_center,
+                                    'last_education' => $emp->last_education,
+                                    'major_last_education' => $emp->major_last_education,
+                                    'last_education_institutional' => $emp->last_education_institutional,
+                                    'tax_dependents' => $emp->tax_dependents, 'npwp' => $emp->npwp,
+                                    'outsourcing_vendor' => $emp->outsourcing_vendor,
+                                    'bpjs_kesehatan' => $emp->bpjs_kesehatan,
+                                    'bpjs_ketenagakerjaan' => $emp->bpjs_ketenagakerjaan,
+                                    'latest_agreement_number' => $emp->latest_agreement_number,
+                                    'active_agreement_number' => $emp->active_agreement_number,
+                                    'bank_name' => $emp->bank_name, 'bank_account' => $emp->bank_account,
+                                    'bank_account_holder' => $emp->bank_account_holder,
+                                    'blood_type' => $emp->blood_type,
+                                    'contract_startdate' => $emp->contract_startdate,
+                                    'contract_number' => $emp->contract_number,
+                                    'department' => $emp->department->name ?? null,
+                                    'position' => $emp->position->nama ?? null,
+                                    'section' => $emp->section->nama ?? null,
+                                    'level' => $emp->level->nama ?? null,
+                                    'area' => $emp->area->name ?? null,
+                                    'building' => $emp->building->nama ?? null,
+                                ];
+                            @endphp
                             <option value="{{ $emp->id }}"
+                                data-emp='{!! htmlspecialchars(json_encode($empJson), ENT_QUOTES) !!}'
                                 data-nik="{{ $emp->nik ?? '-' }}"
                                 data-nama="{{ $emp->fullname }}"
                                 data-dept="{{ $emp->department->name ?? '-' }}"
@@ -211,7 +338,24 @@
                             </option>
                             @endforeach
                         </select>
-                        <small class="text-muted">Gunakan CTRL/CMD + klik untuk memilih lebih dari satu.</small>
+                        <small class="text-muted">Urutan pemilihan menentukan peran: karyawan pertama = pihak pertama (Sign 1), karyawan kedua = pihak kedua (Sign 2).</small>
+                    </div>
+
+                    {{-- Pihak Pertama & Penerima (mode multisurat) --}}
+                    <div id="multiEmployeeWrap" style="display:none;">
+                        <div class="mb-3">
+                            <label class="form-label">Pihak Pertama / Dari Perusahaan</label>
+                            <select class="form-control" id="selectPihakPertama" style="width: 100%;">
+                                <option value="">— Pilih Pihak Pertama —</option>
+                            </select>
+                            <small class="text-muted">Penandatangan pihak pertama / dari perusahaan (Sign 1).</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Penerima <small class="text-muted">(bisa lebih dari satu)</small></label>
+                            <select class="form-control" id="selectPenerima" style="width: 100%;" multiple>
+                            </select>
+                            <small class="text-muted">Pilih beberapa penerima. Tiap penerima diberi nomor urut, dan menjadi pihak kedua (Sign 2) pada salinannya masing-masing.</small>
+                        </div>
                     </div>
 
                     {{-- Info Employee --}}
@@ -268,7 +412,7 @@
                     <div class="mb-3">
                         <label class="form-label">Judul Surat</label>
                         <input type="text" name="title" class="form-control" id="fieldTitle"
-                            value="{{ $mode === 'edit' && $doc ? $doc->title : $data['title'] }}"
+                            value="@if($mode === 'edit' && $doc) {{ $doc->title }} @elseif($mode === 'edit-batch' && isset($batchDocs) && $batchDocs->isNotEmpty()) {{ $batchDocs->first()->title }} @else {{ $data['title'] }} @endif"
                             placeholder="Masukkan judul surat">
                     </div>
 
@@ -280,8 +424,10 @@
 
                     {{-- Penandatangan (Sign 1, 2, 3) --}}
                     <hr>
+                    @php $signSlots = $activeTemplate ? $activeTemplate->sign_slots : [1]; @endphp
                     <div id="signEmployeeFields">
                         <label class="form-label mb-2">Penandatangan</label>
+                        @if(in_array(1, $signSlots))
                         <div class="mb-3 sign-field" id="signField1">
                             <label class="form-label" style="font-size:11px;text-transform:none;letter-spacing:0;">Sign 1 — Pilih Employee</label>
                             <select class="form-control sign-employee-select" id="selectEmployee1" style="width: 100%;">
@@ -304,6 +450,8 @@
                                 @endforeach
                             </select>
                         </div>
+                        @endif
+                        @if(in_array(2, $signSlots))
                         <div class="mb-3 sign-field" id="signField2">
                             <label class="form-label" style="font-size:11px;text-transform:none;letter-spacing:0;">Sign 2 — Pilih Employee</label>
                             <select class="form-control sign-employee-select" id="selectEmployee2" style="width: 100%;">
@@ -326,6 +474,8 @@
                                 @endforeach
                             </select>
                         </div>
+                        @endif
+                        @if(in_array(3, $signSlots))
                         <div class="mb-3 sign-field" id="signField3">
                             <label class="form-label" style="font-size:11px;text-transform:none;letter-spacing:0;">Sign 3 — Pilih Employee</label>
                             <select class="form-control sign-employee-select" id="selectEmployee3" style="width: 100%;">
@@ -348,6 +498,7 @@
                                 @endforeach
                             </select>
                         </div>
+                        @endif
                     </div>
 
                     {{-- Placeholder Inputs --}}
@@ -372,14 +523,16 @@
                     {{-- Keterangan --}}
                     <div class="mb-3">
                         <label class="form-label">Keterangan</label>
-                        <textarea name="description" class="form-control" rows="2" placeholder="Opsional">{{ $mode === 'edit' && $doc ? $doc->description : '' }}</textarea>
-                    </div>
+                        <textarea name="description" class="form-control" rows="2" placeholder="Opsional">{{ $mode === 'edit' && $doc ? $doc->description : '' }}</textarea>                    </div>
 
                     {{-- Buttons --}}
                     <div class="d-grid gap-2 mt-3">
-                        <button type="submit" class="btn btn-{{ $mode === 'edit' ? 'primary' : 'warning' }}" id="btnSimpanDraft">
-                            <i class="ri-{{ $mode === 'edit' ? 'refresh' : 'save' }}-line me-1"></i>
-                            {{ $mode === 'edit' ? 'Update Draft' : 'Simpan Draft' }}
+                        <button type="submit" class="btn btn-{{ ($mode === 'edit' || $mode === 'edit-batch') ? 'primary' : 'warning' }}" id="btnSimpanDraft">
+                            <i class="ri-{{ ($mode === 'edit' || $mode === 'edit-batch') ? 'refresh' : 'save' }}-line me-1"></i>
+                            {{ ($mode === 'edit' || $mode === 'edit-batch') ? 'Update Draft' : 'Simpan Draft' }}
+                        </button>
+                        <button type="submit" class="btn btn-success" id="btnLangsungKirim">
+                            <i class="ri-send-plane-line me-1"></i> Langsung Kirim ke Employee
                         </button>
                         <a href="{{ route('e-sign.daftar-surat') }}" class="btn btn-light">
                             <i class="ri-arrow-left-line me-1"></i> Kembali
@@ -397,17 +550,67 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/locales/bootstrap-datepicker.id.min.js"></script>
 <script>
+    // Back browser → kembali ke tampilan Daftar Surat
+    (function() {
+        if (window.history && window.history.pushState) {
+            history.pushState(null, '', location.href);
+            window.addEventListener('popstate', function() {
+                window.location.replace('{{ route("e-sign.daftar-surat") }}');
+            });
+        }
+    })();
+</script>
+<script>
     // Store raw template content (with placeholders)
     var rawContent = '';
     var openBrace = String.fromCharCode(123, 123);
     var closeBrace = String.fromCharCode(125, 125);
 
+    // Slot tanda tangan aktif dari template (1=kanan, 2=kiri, 3=tengah)
+    window.activeSigns = @json($activeTemplate ? $activeTemplate->sign_slots : [1]);
+
+    // Daftar field employee untuk placeholder (employee_/employee1_/2_/3_)
+    var empFields = @json($employeePlaceholderFields);
+
     $(document).ready(function() {
-        // Init Select2 multiple untuk employee
+        // Init Select2 multiple untuk employee (mode single / non-multisurat)
+        // Urutan pemilihan menentukan peran: pertama = pihak pertama (Sign 1), kedua = pihak kedua (Sign 2).
         $('#selectEmployee').select2({
             placeholder: 'Cari berdasarkan NIK atau Nama...',
             allowClear: true,
             width: '100%',
+            templateSelection: function(data, container) {
+                if (!data.id) return data.text;
+                var values = $('#selectEmployee').val() || [];
+                var idx = values.indexOf(String(data.id));
+                if (idx === -1) return data.text;
+                var roleLabel = idx === 0 ? 'Pihak Pertama' : (idx === 1 ? 'Pihak Kedua' : 'Pihak ' + (idx + 1));
+                return $('<span title="' + roleLabel + '"><span class="badge bg-primary me-1" style="font-size:10px;">' + (idx + 1) + '</span>' + data.text + '</span>');
+            },
+        });
+
+        // Inisialisasi field multisurat: Pihak Pertama (single) & Penerima (multiple, bernomor)
+        // Opsi di-clone dari selectEmployee agar data atribut (data-emp, dsb.) ikut terbawa.
+        $('#selectPihakPertama').append($('#selectEmployee option').clone());
+        $('#selectPenerima').append($('#selectEmployee option').clone());
+
+        $('#selectPihakPertama').select2({
+            placeholder: 'Cari berdasarkan NIK atau Nama...',
+            allowClear: true,
+            width: '100%',
+        });
+
+        $('#selectPenerima').select2({
+            placeholder: 'Cari berdasarkan NIK atau Nama...',
+            allowClear: true,
+            width: '100%',
+            templateSelection: function(data, container) {
+                if (!data.id) return data.text;
+                var values = $('#selectPenerima').val() || [];
+                var idx = values.indexOf(String(data.id));
+                if (idx === -1) return data.text;
+                return $('<span><span class="badge bg-info me-1" style="font-size:10px;">P' + (idx + 1) + '</span>' + data.text + '</span>');
+            },
         });
 
         // Init Select2 untuk sign employee
@@ -420,7 +623,11 @@
         });
 
         // Load initial template content
-        @if($activeTemplate && $activeTemplate->content)
+        // Mode edit: gunakan konten draft yang sudah tersimpan (sudah berisi data employee)
+        // agar variabel tidak tampil kosong. Mode create: gunakan konten template mentah.
+        @if(($mode === 'edit' || $mode === 'edit-batch') && isset($doc) && $doc && $doc->content)
+        rawContent = {!! json_encode($doc->content) !!};
+        @elseif($activeTemplate && $activeTemplate->content)
         rawContent = {!! json_encode($activeTemplate->content) !!};
         @elseif($templates && $templates->count() > 0)
         var firstOpt = $('#selectTemplate').length ? $('#selectTemplate').find('option:first') : null;
@@ -457,12 +664,52 @@
             $('#infoMarital').text(first.data('marital') || '-');
             $('#infoHp').text(first.data('hp') || '-');
             $('#infoEmail').text(first.data('email') || '-');
+            // Auto-fill Penandatangan dari karyawan bernomor (Sign 1 = karyawan 1, dst)
+            // Hanya isi jika dropdown belum diisi manual, agar tidak menimpa pilihan user.
+            selected.each(function(idx) {
+                var signIdx = idx + 1;
+                var sel = $('#selectEmployee' + signIdx);
+                if (sel.length && !sel.val()) {
+                    sel.val($(this).val()).trigger('change');
+                }
+            });
             renderPreview();
         });
 
         // Employee change for each sign
         $(document).on('change', '.sign-employee-select', function() {
             syncEmployeeHidden();
+            renderPreview();
+        });
+
+        // Toggle Multisurat
+        $('#toggleMultiSurat').on('change', function() {
+            var on = $(this).is(':checked');
+            $('#inputMultiSurat').val(on ? '1' : '0');
+            $('#multiHint').toggle(on);
+            $('#singleEmployeeWrap').toggle(!on);
+            $('#multiEmployeeWrap').toggle(on);
+            if (!on) {
+                $('#inputEmployee1Id').val('');
+            }
+            renderPreview();
+        });
+
+        // Pilih Pihak Pertama (multisurat) — menjadi Sign 1 / employee1_signee_id
+        $('#selectPihakPertama').on('change', function() {
+            var val = $(this).val() || '';
+            $('#inputEmployee1Id').val(val);
+            $('#inputEmployeeId').val(val);
+            renderPreview();
+        });
+
+        // Pilih Penerima (multisurat, multiple)
+        $('#selectPenerima').on('change', function() {
+            renderPreview();
+        });
+
+        // Toggle Sign 2 = Penerima (multisurat) — sementara disembunyikan
+        $('#toggleSign2Recipient').on('change', function() {
             renderPreview();
         });
 
@@ -516,6 +763,58 @@
         initDatepicker();
         renderPreview();
 
+        // EDIT-BATCH: pre-select penerima batch & aktifkan mode multi
+        @if($mode === 'edit-batch')
+        (function() {
+            var recipientIds = @json($batchDocs->pluck('employee_id')->toArray());
+            recipientIds.forEach(function(id) {
+                var opt = $('#selectPenerima option[value="' + id + '"]');
+                if (opt.length) opt.prop('selected', true);
+            });
+            var ppId = @json($batchDocs->first()->employee1_signee_id ?? null);
+            if (ppId) {
+                var optPp = $('#selectPihakPertama option[value="' + ppId + '"]');
+                if (optPp.length) optPp.prop('selected', true);
+            }
+            $('#selectPenerima').trigger('change');
+            $('#toggleMultiSurat').prop('checked', true).trigger('change');
+        })();
+        @endif
+
+        // EDIT (surat tunggal): pre-select employee & signee dari draft tersimpan
+        @if($mode === 'edit' && $doc)
+        (function() {
+            var empId = @json($doc->employee_id ?? null);
+            if (empId) {
+                var opt = $('#selectEmployee option[value="' + empId + '"]');
+                if (opt.length) opt.prop('selected', true);
+                $('#selectEmployee').trigger('change');
+            }
+            [
+                [1, '#selectEmployee1', '#inputEmployee1Id'],
+                [2, '#selectEmployee2', '#inputEmployee2Id'],
+                [3, '#selectEmployee3', '#inputEmployee3Id']
+            ].forEach(function(pair) {
+                var signeeId = @json($doc->employee1_signee_id ?? null);
+                if (pair[0] === 2) signeeId = @json($doc->employee2_signee_id ?? null);
+                if (pair[0] === 3) signeeId = @json($doc->employee3_signee_id ?? null);
+                if (signeeId) {
+                    var sel = $(pair[1]);
+                    var sopt = sel.find('option[value="' + signeeId + '"]');
+                    if (sopt.length) sel.val(signeeId).trigger('change');
+                    $(pair[2]).val(signeeId);
+                }
+            });
+            syncEmployeeHidden();
+            renderPreview();
+        })();
+        @endif
+
+        // Re-render setelah semua gambar (kop surat) termuat agar pagination akurat
+        $(window).on('load', function() {
+            renderPreview();
+        });
+
         // Re-generate date fields when template changes
         $(document).on('change', '#selectTemplate', function() {
             setTimeout(function() {
@@ -527,7 +826,61 @@
         });
 
         // Before submit, save rendered content
-        $('#formDraft').on('submit', function() {
+        $('#formDraft').on('submit', function(e) {
+            var form = this;
+            var $form = $(form);
+            var multi = $('#inputMultiSurat').val() === '1';
+            var selected = $('#selectEmployee').find(':selected');
+            var recipients = $('#selectPenerima').find(':selected');
+
+            // Tentukan jenis aksi dari tombol yang ditekan
+            var submitter = e && e.originalEvent && e.originalEvent.submitter;
+            if (submitter) {
+                if (submitter.id === 'btnSimpanDraft') {
+                    $('#inputSendNow').val('0');
+                } else if (submitter.id === 'btnLangsungKirim') {
+                    $('#inputSendNow').val('1');
+                }
+            }
+
+            // Mode MULTISURAT: kirim array recipients[] (employee_id + content per penerima)
+            if (multi && recipients.length > 0) {
+                // Hapus input recipients lama jika ada (mis. saat re-submit)
+                $form.find('input[name^="recipients["]').remove();
+                $form.find('textarea[name^="recipients["]').remove();
+
+                // Sync pihak pertama (Sign 1) ke employee1_signee_id
+                syncEmployeeHidden();
+                $('#inputEmployee1Id').val($('#selectPihakPertama').val() || '');
+
+                var base = buildBaseContent();
+                var submitted = 0;
+                recipients.each(function(i) {
+                    var empData = getEmployeeDataByIndex(i, '#selectPenerima');
+                    var content = applyRecipientPlaceholders(base, empData);
+                    if (content.indexOf('signature-box') === -1) {
+                        content += multiSignAreaHtml(empData);
+                    }
+                    $form.append('<input type="hidden" name="recipients[' + submitted + '][employee_id]" value="' + $(this).val() + '">');
+                    // Simpan konten HTML mentah via textarea tersembunyi (TIDAK di-escape),
+                    // sehingga preview merender HTML dengan benar.
+                    var $contentBox = $('<textarea style="display:none;" name="recipients[' + submitted + '][content]"></textarea>').text(content);
+                    $form.append($contentBox);
+                    submitted++;
+                });
+
+                // Tanggal tersembunyi (sama seperti single)
+                if (!$('#hiddenTglMulai').length) {
+                    $form.append('<input type="hidden" name="tanggal_mulai" id="hiddenTglMulai" value="">');
+                    $form.append('<input type="hidden" name="tanggal_akhir" id="hiddenTglAkhir" value="">');
+                }
+                $('#hiddenTglMulai').val($('#dateField_tanggal_mulai').val() || $('#dynamicDatesList .dynamic-date-input:first').val() || '');
+                $('#hiddenTglAkhir').val($('#dateField_tanggal_akhir').val() || '');
+
+                return true;
+            }
+
+            // Mode SINGLE
             var rendered = renderPreview();
             $('#inputContent').val(rendered || rawContent);
 
@@ -543,7 +896,6 @@
             $('#hiddenTglAkhir').val($('#dateField_tanggal_akhir').val() || '');
 
             // Multi-select: disable all except first option so only first employee_id is submitted
-            var selected = $('#selectEmployee').find(':selected');
             if (selected.length > 1) {
                 selected.each(function(index) {
                     if (index > 0) $(this).prop('selected', false);
@@ -570,10 +922,18 @@
         };
     }
 
-    function getEmployeeDataByIndex(index) {
-        var sel = $('#selectEmployee').find(':selected');
-        if (sel.length <= index || !sel.eq(index).val()) return null;
-        var s = sel.eq(index);
+    function getEmployeeDataByIndex(index, selector) {
+        var $source = selector ? $(selector).find(':selected') : $('#selectEmployee').find(':selected');
+        if ($source.length <= index || !$source.eq(index).val()) return null;
+        var s = $source.eq(index);
+        var parsed = null;
+        try { parsed = JSON.parse(s.attr('data-emp') || ''); } catch(e) { parsed = null; }
+        if (parsed && typeof parsed === 'object') {
+            parsed.name = parsed.fullname || s.data('nama') || '-';
+            parsed.dept = parsed.department || s.data('dept') || '-';
+            parsed.fullname = parsed.fullname || parsed.name || '-';
+            return parsed;
+        }
         return {
             name: s.data('nama') || '-',
             nik: s.data('nik') || '-',
@@ -647,7 +1007,7 @@
             'employee3_name','employee3_nik','employee3_position','employee3_department',
             'employee3_birthplace','employee3_birthdate','employee3_gender','employee3_religion',
             'employee3_marital','employee3_hp','employee3_email',
-            'nomor_surat','judul_surat','today',
+            'nomor_surat','today',
             'sign_employee1','sign_employee2','sign_employee3',
         ];
 
@@ -707,99 +1067,307 @@
                 '<i class="ri-file-text-line fs-1"></i>' +
                 '<p class="mt-2">Template belum tersedia. Silakan buat template terlebih dahulu.</p>' +
                 '</div>'
-            );
+            ).show();
+            var containerEl = document.getElementById('docPreview');
+            if (containerEl) {
+                var oldPages = containerEl.querySelectorAll('.doc-preview-page');
+                for (var op = 0; op < oldPages.length; op++) oldPages[op].remove();
+            }
             return '';
         }
 
+        var empFields = @json($employeePlaceholderFields);
+
+        // ---- base: placeholder yang TIDAK terkait employee (sama untuk semua salinan) ----
+        var base = buildBaseContent();
+
+        var title = $('#fieldTitle').val() || '{{ $data["title"] }}';
+        var logoUrl = '{{ url("") }}/assets/images/KOP-terbaru.png';
+        function headerHtml() {
+            return '<div class="company-header"><img src="' + logoUrl + '" alt="Kop Surat"></div>' +
+                '<div class="doc-title">' + title + '</div>' +
+                '<div class="doc-number">Nomor: _______________</div>';
+        }
+
+        function isMultiSurat() {
+            return $('#toggleMultiSurat').length && $('#toggleMultiSurat').is(':checked');
+        }
+
+        var selected = $('#selectEmployee').find(':selected');
+        var recipients = $('#selectPenerima').find(':selected');
+        var multi = isMultiSurat() && recipients.length > 0;
+
+        // ---- MULTI-SURAT: render N salinan, tiap salinan data penerima sendiri ----
+        if (multi) {
+            var pages = [];
+            recipients.each(function(i) {
+                var empData = getEmployeeDataByIndex(i, '#selectPenerima');
+                var content = applyRecipientPlaceholders(base, empData);
+                if (content.indexOf('signature-box') === -1) {
+                    content += multiSignAreaHtml(empData);
+                }
+                var page = '<div class="doc-preview-page">' + headerHtml() + content + '</div>';
+                if (i < recipients.length - 1) page += '<div class="preview-page-break"></div>';
+                pages.push(page);
+            });
+            $('#renderedContent').html(pages.join('')).show();
+            // Bersihkan halaman pagination hasil render tunggal sebelumnya (jika ada)
+            var cEl = document.getElementById('docPreview');
+            if (cEl) {
+                var leftovers = cEl.querySelectorAll('.doc-preview-page');
+                for (var lx = 0; lx < leftovers.length; lx++) {
+                    if (leftovers[lx].parentNode !== document.getElementById('renderedContent')) leftovers[lx].remove();
+                }
+            }
+            return base;
+        }
+
+        // ---- SINGLE mode (existing) ----
+        var content = base;
+        // placeholder employeeX_name → fullname sesuai index (employee_/1_=0, 2_=1, 3_=2)
+        content = content.replace(/\{\{employee_name\}\}|\{\{employee1_name\}\}/g, function() {
+            var e = getEmployeeDataByIndex(0); return (e && (e.name || e.fullname)) || '_______________';
+        });
+        content = content.replace(/\{\{employee2_name\}\}/g, function() {
+            var e = getEmployeeDataByIndex(1); return (e && (e.name || e.fullname)) || '_______________';
+        });
+        content = content.replace(/\{\{employee3_name\}\}/g, function() {
+            var e = getEmployeeDataByIndex(2); return (e && (e.name || e.fullname)) || '_______________';
+        });
+        [['employee_', 0], ['employee1_', 0], ['employee2_', 1], ['employee3_', 2]].forEach(function(pair) {
+            empFields.forEach(function(f) {
+                var empData = getEmployeeDataByIndex(pair[1]);
+                var v = empData ? (empData[f] || '_______________') : '_______________';
+                content = content.replace(new RegExp('\\{\\{' + escRegex(pair[0] + f) + '\\}\\}', 'g'), v);
+            });
+        });
+        content = content.replace(/\{\{sign_employee1\}\}/g, signEmpHtml('Sign 1', null, 1));
+        content = content.replace(/\{\{sign_employee2\}\}/g, signEmpHtml('Sign 2', null, 2));
+        content = content.replace(/\{\{sign_employee3\}\}/g, signEmpHtml('Sign 3', null, 3));
+
+        if (content.indexOf('signature-box') === -1 && window.activeSigns && window.activeSigns.length) {
+            content += buildSignAreaHtml();
+        }
+        var htmlSingle = headerHtml() + content;
+        $('#renderedContent').html(htmlSingle).show();
+        paginateDocument();
+        return content;
+    }
+
+    function escRegex(str) {
+        return String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // Kotak tanda tangan generik (label + nama + jabatan) — dipakai multi-surat
+    function signBoxHtml(label, name, position) {
+        return '<div style="flex:1;text-align:center;">' +
+            '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#1e293b;">' + label + '</div>' +
+            '<div style="width:120px;height:80px;border:2px dashed #adb5bd;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:10px;color:#adb5bd;background:#f8f9fa;">' +
+            '<span>QR Code<br>Digital Signature</span></div>' +
+            '<div style="font-size:12px;font-weight:600;color:#212529;margin-bottom:2px;">' + (name || '_______________') + '</div>' +
+            '<div style="font-size:11px;color:#6c757d;">' + (position || '_______________') + '</div></div>';
+    }
+
+    // Replace placeholder employee untuk satu penerima (employee_/employee1_/2_/3_ → penerima)
+    function applyRecipientPlaceholders(content, empData) {
+        // placeholder employee_name & varian → fullname (name bukan field model, diambil dari fullname)
+        var nameVal = empData ? (empData.name || empData.fullname || '_______________') : '_______________';
+        content = content.replace(/\{\{(?:employee|employee1|employee2|employee3)_name\}\}/g, nameVal);
+        // Penerima multi-surat adalah subjek surat → semua varian prefix menunjuk ke data penerima
+        empFields.forEach(function(f) {
+            var v = empData ? (empData[f] || '_______________') : '_______________';
+            content = content.replace(new RegExp('\\{\\{(?:employee|employee1|employee2|employee3)_' + escRegex(f) + '\\}\\}', 'g'), v);
+        });
+        return content;
+    }
+
+    // Area tanda tangan per salinan multi-surat: Sign 1 (penanggung jawab) & Sign 2 (penerima)
+    function multiSignAreaHtml(empData) {
+        var hrName = '{{ optional(Auth::user()->employee)->fullname ?? "HR / Admin" }}';
+        var hrPos = '{{ optional(Auth::user()->employee?->position)->nama ?? "HR / Admin" }}';
+        var recName = empData ? (empData.fullname || '_______________') : '_______________';
+        var recPos = empData ? (empData.position || '_______________') : '_______________';
+
+        // Sign 1: pihak pertama / dari perusahaan (field Pihak Pertama), fallback HR
+        var pp = $('#selectPihakPertama').find(':selected');
+        var ppName = (pp.length && pp.val()) ? (pp.data('nama') || hrName) : hrName;
+        var ppPos = (pp.length && pp.val()) ? (pp.data('jabatan') || hrPos) : hrPos;
+        var sign1Name = ppName;
+        var sign1Pos = ppPos;
+
+        // Sign 2: pihak kedua / penerima → penerima salinan ini (backend simpan sebagai employee2_signee_id)
+        var sign2Name = recName;
+        var sign2Pos = recPos;
+
+        return '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-top:18px;page-break-inside:avoid;">' +
+            signBoxHtml('Sign 1', sign1Name, sign1Pos) +
+            signBoxHtml('Sign 2', sign2Name, sign2Pos) +
+            '</div>';
+    }
+
+    // Bangun konten dasar (placeholder non-employee direplace) — dipakai single & multi
+    function buildBaseContent() {
         var content = rawContent;
-        var emp = getEmployeeData();
-
-        // ============================================================
-        // REPLACE ALL PLACEHOLDERS — otomatis dari data yang tersedia
-        // ============================================================
-
-        // 1. Employee data mapping
-        var empFieldMap = {
-            'employee_name': 'name', 'employee_nik': 'nik', 'employee_position': 'position',
-            'employee_department': 'dept', 'employee_birthplace': 'birthplace',
-            'employee_birthdate': 'birthdate', 'employee_gender': 'gender',
-            'employee_religion': 'religion', 'employee_marital': 'marital',
-            'employee_hp': 'hp', 'employee_email': 'email',
-            'employee1_nik': 'nik', 'employee1_fullname': 'name', 'employee1_name': 'name',
-            'employee1_position': 'position', 'employee1_department': 'dept',
-            'employee2_nik': 'nik', 'employee2_fullname': 'name', 'employee2_name': 'name',
-            'employee2_position': 'position', 'employee2_department': 'dept',
-            'employee3_nik': 'nik', 'employee3_fullname': 'name', 'employee3_name': 'name',
-            'employee3_position': 'position', 'employee3_department': 'dept',
-        };
-        
-        // Map placeholder → (employee index, field key)
-        var empPlaceholderMap = {};
-        for (var p in empFieldMap) {
-            var idx = 1;
-            if (p.indexOf('employee2') === 0) idx = 2;
-            else if (p.indexOf('employee3') === 0) idx = 3;
-            empPlaceholderMap[p] = { index: idx - 1, field: empFieldMap[p] };
-        }
-
-        // Replace employee placeholders via regex
-        for (var placeholder in empPlaceholderMap) {
-            var info = empPlaceholderMap[placeholder];
-            var empData = getEmployeeDataByIndex(info.index);
-            var val = empData ? (empData[info.field] || '_______________') : '_______________';
-            var re = new RegExp('\\{\\{' + placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\}\\}', 'g');
-            content = content.replace(re, val);
-        }
-
-        // 2. Date placeholders — dinamis dari field yang di-generate
         $('.dynamic-date-input').each(function() {
             var key = $(this).data('date-key');
             var val = $(this).val() || '_______________';
-            var regex = new RegExp('\\{\\{' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\}\\}', 'g');
-            content = content.replace(regex, val);
+            content = content.replace(new RegExp('\\{\\{' + escRegex(key) + '\\}\\}', 'g'), val);
         });
         content = content.replace(/\{\{today\}\}/g, new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }));
-
-        // 3. Document fields
         content = content.replace(/\{\{nomor_surat\}\}/g, '_______________');
         content = content.replace(/\{\{judul_surat\}\}/g, $('#fieldTitle').val() || '_______________');
+        $('.placeholder-field').each(function() {
+            var placeholder = $(this).data('placeholder');
+            var val = $(this).val() || '_______________';
+            content = content.replace(new RegExp(escRegex(placeholder), 'g'), val);
+        });
+        return content;
+    }
 
-        // 4. Sign placeholders — ambil dari select sign 1,2,3
-        function signEmpHtml(label, name, idx) {
+    // Kotak tanda tangan (single mode) — dibaca dari select sign 1/2/3
+    function signEmpHtml(label, name, idx) {
+        var empSign = getSignEmployeeData(idx);
+        var displayName = empSign ? empSign.name : '_______________';
+        var displayPosition = empSign ? empSign.position : '_______________';
+        return '<div class="signature-box" style="text-align:center;margin-top:16px;">' +
+            '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#1e293b;">' + label + '</div>' +
+            '<div style="width:120px;height:80px;border:2px dashed #adb5bd;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:10px;color:#adb5bd;background:#f8f9fa;">' +
+            '<span>QR Code<br>Digital Signature</span></div>' +
+            '<div style="font-size:12px;font-weight:600;color:#212529;margin-bottom:2px;">' + displayName + '</div>' +
+            '<div style="font-size:11px;color:#6c757d;">' + displayPosition + '</div></div>';
+    }
+
+    // Bangun area tanda tangan pada preview Buat Surat sesuai slot aktif template
+    // Posisi tetap: kiri=Sign2, tengah=Sign3, kanan=Sign1
+    function buildSignAreaHtml() {
+        var active = window.activeSigns || [];
+        function box(label, idx) {
             var empSign = getSignEmployeeData(idx);
             var displayName = empSign ? empSign.name : '_______________';
             var displayPosition = empSign ? empSign.position : '_______________';
-            return '<div class="signature-box" style="text-align:center;margin-top:16px;">' +
+            return '<div style="flex:1;text-align:center;">' +
                 '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#1e293b;">' + label + '</div>' +
                 '<div style="width:120px;height:80px;border:2px dashed #adb5bd;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:10px;color:#adb5bd;background:#f8f9fa;">' +
                 '<span>QR Code<br>Digital Signature</span></div>' +
                 '<div style="font-size:12px;font-weight:600;color:#212529;margin-bottom:2px;">' + displayName + '</div>' +
                 '<div style="font-size:11px;color:#6c757d;">' + displayPosition + '</div></div>';
         }
-        content = content.replace(/\{\{sign_employee1\}\}/g, signEmpHtml('Sign 1', null, 1));
-        content = content.replace(/\{\{sign_employee2\}\}/g, signEmpHtml('Sign 2', null, 2));
-        content = content.replace(/\{\{sign_employee3\}\}/g, signEmpHtml('Sign 3', null, 3));
+        function cell(sign) {
+            if (active.indexOf(sign) === -1) return '';
+            return box('Sign ' + sign, sign);
+        }
+        return '<div class="esign-signature-area" style="display:flex;align-items:flex-start;justify-content:space-between;margin-top:32px;page-break-inside:avoid;">' +
+            cell(2) + cell(3) + cell(1) + '</div>';
+    }
 
-        // 5. Custom placeholder fields (dari form Data Surat)
-        $('.placeholder-field').each(function() {
-            var placeholder = $(this).data('placeholder');
-            var val = $(this).val() || '_______________';
-            content = content.replace(new RegExp(escapeRegex(placeholder), 'g'), val);
+    // ===== Pagination Dokumen Preview Editor =====
+    // Menggunakan algoritma & ukuran A4 yang SAMA dengan ikon preview surat
+    // (create.blade.php) agar jumlah halaman antara keduanya selalu konsisten.
+    function paginateDocument() {
+        var container = document.getElementById('docPreview');
+        var source = document.getElementById('renderedContent');
+        if (!container || !source) return;
+
+        // Bersihkan halaman & page break hasil pagination sebelumnya
+        var oldPages = container.querySelectorAll('.doc-preview-page');
+        for (var op = 0; op < oldPages.length; op++) oldPages[op].remove();
+        container.querySelectorAll('.preview-page-break').forEach(function(b) { b.remove(); });
+
+        // Pastikan source kembali jadi anak langsung container (tersembunyi sebagai sumber)
+        if (source.parentNode !== container) container.appendChild(source);
+        source.style.display = 'none';
+
+        // Pisahkan kop surat (logo) agar diulang di SETIAP halaman,
+        // sedangkan judul & nomor surat hanya muncul di halaman pertama.
+        var kopEl = null, titleEl = null, numEl = null, hasKop = false;
+        var kopNode = source.querySelector('.company-header');
+        if (kopNode) { kopEl = kopNode; kopNode.parentNode.removeChild(kopNode); hasKop = true; }
+        var titleNode = source.querySelector('.doc-title');
+        if (titleNode) { titleEl = titleNode; }
+        var numNode = source.querySelector('.doc-number');
+        if (numNode) { numEl = numNode; }
+
+        // Pisahkan area tanda tangan agar selalu berada di AKHIR dokumen (di bawah),
+        // dan tidak ikut ter-paginasi ke atas halaman.
+        var sigEl = null;
+        var sigNode = source.querySelector('.esign-signature-area');
+        if (sigNode) { sigEl = sigNode; sigNode.parentNode.removeChild(sigNode); }
+
+        // Buat halaman pertama dan tuangkan seluruh isi konten ke dalamnya
+        var firstPage = document.createElement('div');
+        firstPage.className = 'doc-preview-page';
+        container.appendChild(firstPage);
+        if (hasKop) firstPage.appendChild(kopEl.cloneNode(true));
+        if (titleEl) firstPage.appendChild(titleEl);
+        if (numEl) firstPage.appendChild(numEl);
+
+        var nodes = Array.prototype.slice.call(source.childNodes);
+        for (var i = 0; i < nodes.length; i++) {
+            firstPage.appendChild(nodes[i]);
+        }
+
+        // Sama persis dengan ikon preview: pecah per elemen blok hingga muat dalam 297mm
+        var maxH = 297 * 3.78; // 297mm ke px
+        var allPages = [firstPage];
+        var pageIndex = 0;
+
+        function makeNextPage(currentPage) {
+            var np = document.createElement('div');
+            np.className = 'doc-preview-page';
+            currentPage.parentNode.insertBefore(np, currentPage.nextSibling);
+            // Page break visual di antara kertas
+            var brk = document.createElement('div');
+            brk.className = 'preview-page-break';
+            currentPage.parentNode.insertBefore(brk, np);
+            // Halaman berikutnya hanya kop surat (tanpa judul/nomor)
+            if (hasKop) np.appendChild(kopEl.cloneNode(true));
+            allPages.push(np);
+            return np;
+        }
+
+        while (pageIndex < allPages.length) {
+            var currentPage = allPages[pageIndex];
+            var safety = 0;
+
+            while (currentPage.scrollHeight > maxH + 5 && safety < 50) {
+                safety++;
+                var children = currentPage.children;
+                if (children.length <= 1) break; // sisakan minimal 1 elemen (mis. hanya kop)
+
+                var lastEl = children[children.length - 1];
+
+                var nextPage = allPages[pageIndex + 1] || makeNextPage(currentPage);
+                // Sisipkan ke AWAL konten halaman berikutnya (setelah kop surat).
+                // Elemen dipindah satu per satu dari AKHIR halaman sebelumnya, jadi jika
+                // ditambahkan ke akhir akan membalik urutan; insert di awal membuat urutan tetap benar.
+                var insertBefore = nextPage.children[hasKop ? 1 : 0];
+                if (insertBefore) nextPage.insertBefore(lastEl, insertBefore);
+                else nextPage.appendChild(lastEl);
+            }
+            pageIndex++;
+        }
+
+        // Tempel area tanda tangan di halaman TERAKHIR (di bawah konten).
+        // Jika tidak muat, letakkan di halaman baru agar tetap di akhir dokumen.
+        if (sigEl) {
+            var lastPage = allPages[allPages.length - 1];
+            lastPage.appendChild(sigEl);
+            if (lastPage.scrollHeight > maxH + 5) {
+                lastPage.removeChild(sigEl);
+                var lastNext = makeNextPage(lastPage);
+                lastNext.appendChild(sigEl);
+            }
+        }
+
+        // Nomor halaman "X / Y" di pojok kanan bawah tiap kertas
+        allPages.forEach(function(pg, idx) {
+            var existing = pg.querySelector('.preview-page-number');
+            if (existing) existing.remove();
+            var num = document.createElement('div');
+            num.className = 'preview-page-number';
+            num.textContent = (idx + 1) + ' / ' + allPages.length;
+            pg.appendChild(num);
         });
-
-        // Build full preview with company header
-        var title = $('#fieldTitle').val() || '{{ $data["title"] }}';
-        var logoUrl = '{{ url("") }}/assets/images/KOP-terbaru.png';
-
-        var html = '<div class="company-header">' +
-            '<img src="' + logoUrl + '" alt="Kop Surat">' +
-            '</div>' +
-            '<div class="doc-title">' + title + '</div>' +
-            '<div class="doc-number">Nomor: _______________</div>' +
-            content;
-
-        $('#renderedContent').html(html);
-        return content;
     }
 </script>
 @endsection

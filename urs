@@ -30,3 +30,7 @@ INTRANET.ES.26.004	"Sub Menu dari E-Sign Management :
       - Sign 2 = surat perlu disign oleh employee kedua
       - Sign 3  = surat perluu disign oleh employee ketiga
       - Done = Surat sudah lengkap signya"
+
+INTRANET.ES.26.005	QRCode yang diterbitkan dari Intranet e-Sign Management
+1) jika di scan akan mengahasilkan informasi : Nama Surat, tanggal terbit, ttd oleh siapa, waktu ttd
+2) Link QRCode mengarah pada intranet randomize link

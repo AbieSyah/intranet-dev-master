@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ESign;
+use App\Models\ESignBatch;
 use Illuminate\Support\Facades\DB;
 
 class DocumentNumberService
@@ -93,6 +94,65 @@ class DocumentNumberService
         $lastNumber = (int) end($parts);
 
         return $lastNumber;
+    }
+
+    /**
+     * Generate the next batch number for a given letter type slug.
+     *
+     * Format: {PREFIX}/{DEPT}/{BULAN}/{TAHUN}/{URUTAN}
+     * Contoh: PKWT/HRD/07/2026/001
+     *
+     * Dept default dari config 'esign.batch_dept_segment' (default 'HRD').
+     * Urutan di-reset setiap bulan (per prefix+dept+bulan+tahun) agar unik.
+     * Memakai advisory lock (GET_LOCK) untuk mencegah duplikasi bersamaan.
+     * Metode TIDAK membungkus dengan transaksi — harus dipanggil dari dalam
+     * transaksi yang sudah dibuka oleh pemanggil (ESignService::sendBatch).
+     *
+     * @param string $jenisSuratSlug
+     * @return string nomor batch yang di-generate
+     *
+     * @throws \RuntimeException jika gagal mendapatkan lock
+     */
+    public function generateNextBatchNumber(string $jenisSuratSlug): string
+    {
+        $prefix = $this->getPrefix($jenisSuratSlug);
+        $dept = config('esign.batch_dept_segment', 'HRD');
+        $bulan = now()->format('m');
+        $tahun = now()->format('Y');
+
+        $lockName = 'esign_batch_' . $prefix . '_' . $dept . '_' . $bulan . '_' . $tahun;
+
+        // Ambil lock — timeout 10 detik
+        $gotLock = DB::select("SELECT GET_LOCK(?, 10) AS locked", [$lockName]);
+        $locked = (int) ($gotLock[0]->locked ?? 0);
+
+        if (!$locked) {
+            throw new \RuntimeException(
+                "Gagal mendapatkan lock untuk generate nomor batch: {$prefix}/{$dept}/{$bulan}/{$tahun}. " .
+                "Silakan coba lagi."
+            );
+        }
+
+        try {
+            // Cari batch terakhir dengan prefix+dept+bulan+tahun yang sama
+            $lastBatch = ESignBatch::where('nomor_surat', 'LIKE', "{$prefix}/{$dept}/{$bulan}/{$tahun}/%")
+                ->orderByDesc('nomor_surat')
+                ->lockForUpdate()
+                ->first();
+
+            $lastSeq = 0;
+            if ($lastBatch) {
+                $lastPart = (int) substr(strrchr($lastBatch->nomor_surat, '/') ?: '', 1);
+                $lastSeq = $lastPart;
+            }
+
+            $seq = $lastSeq + 1;
+
+            return sprintf('%s/%s/%s/%s/%03d', $prefix, $dept, $bulan, $tahun, $seq);
+        } finally {
+            // Lepas lock — dijamin jalan walaupun terjadi exception
+            DB::statement("SELECT RELEASE_LOCK(?)", [$lockName]);
+        }
     }
 
     /**

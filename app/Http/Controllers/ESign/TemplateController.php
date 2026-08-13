@@ -61,7 +61,7 @@ class TemplateController extends Controller
         $template = $this->templateService->create($request->validated());
 
         return redirect()
-            ->route('e-sign.jenis-surat.edit', $template->letter_type_id)
+            ->route('e-sign.templates', ['letter_type_id' => $template->letter_type_id])
             ->with('success', 'Template berhasil ditambahkan!');
     }
 
@@ -83,7 +83,7 @@ class TemplateController extends Controller
         $template = $this->templateService->update($id, $request->validated());
 
         return redirect()
-            ->route('e-sign.jenis-surat.edit', $template->letter_type_id)
+            ->route('e-sign.templates', ['letter_type_id' => $template->letter_type_id])
             ->with('success', 'Template berhasil diperbarui!');
     }
 
@@ -108,7 +108,7 @@ class TemplateController extends Controller
         $template = $this->templateService->setActive($id);
 
         return redirect()
-            ->route('e-sign.jenis-surat.edit', $template->letter_type_id)
+            ->route('e-sign.templates', ['letter_type_id' => $template->letter_type_id])
             ->with('success', 'Template aktif berhasil diperbarui.');
     }
 
@@ -127,6 +127,9 @@ class TemplateController extends Controller
                 'rendered' => $rendered,
                 'title' => $template->title,
                 'version' => $template->version,
+                'sign_1' => (int)($template->sign_1 ?? 1),
+                'sign_2' => (int)($template->sign_2 ?? 0),
+                'sign_3' => (int)($template->sign_3 ?? 0),
             ]);
         }
 

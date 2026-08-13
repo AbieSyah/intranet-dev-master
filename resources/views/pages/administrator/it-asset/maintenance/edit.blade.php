@@ -21,7 +21,7 @@
             </a>
          </div>
          <div class="card-body">
-            <x-asset-maintenance.form :maintenance="$maintenance" mode="edit"/>
+            <x-maintenance.form :maintenance="$maintenance" mode="edit"/>
          </div>
       </div>
    </div>

@@ -54,8 +54,10 @@ class LetterTypeService
     public function update(int $id, array $data): LetterType
     {
         $type = LetterType::findOrFail($id);
+
         $data['slug'] = Str::slug($data['name']);
         $type->update($data);
+
         return $type->fresh();
     }
 

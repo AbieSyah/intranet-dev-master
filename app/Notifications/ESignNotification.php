@@ -45,7 +45,10 @@ class ESignNotification extends Notification
         $jenisSurat = $this->eSign->jenis_surat_label;
         $nomorSurat = $this->eSign->nomor_surat ?? '-';
         $pengirim = $this->eSign->creator->employee->fullname ?? $this->eSign->creator->name ?? 'Sistem';
-        $previewUrl = route('e-sign.preview', $this->eSign->id);
+        // Arahkan ke halaman beserta query surat terkait.
+        // Route e-sign.preview butuh permission 'e-sign.menu' (akses Pengelola),
+        // sedangkan penerima surat hanya punya 'e-sign.profile'.
+        $previewUrl = route('e-sign.profile-index', ['esign' => $this->eSign->id]);
 
         return (new MailMessage)
             ->subject("E-Sign: {$jenisSurat} — Mohon Tanda Tangan (Sign {$this->signLevel})")

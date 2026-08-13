@@ -23,26 +23,12 @@ class StoreESignRequest extends FormRequest
     {
         $jenisSuratSlugs = array_keys(ESign::getJenisSuratLabels());
 
-        return [
-            'employee_id' => [
-                'required',
-                'integer',
-                'exists:employees,id',
-            ],
-            'employee1_signee_id' => [
+        $multi = $this->input('multi_surat') === '1';
+
+        $rules = [
+            'multi_surat' => [
                 'nullable',
-                'integer',
-                'exists:employees,id',
-            ],
-            'employee2_signee_id' => [
-                'nullable',
-                'integer',
-                'exists:employees,id',
-            ],
-            'employee3_signee_id' => [
-                'nullable',
-                'integer',
-                'exists:employees,id',
+                'in:0,1',
             ],
             'letter_type_id' => [
                 'required',
@@ -69,7 +55,7 @@ class StoreESignRequest extends FormRequest
                 'string',
             ],
             'tanggal_mulai' => [
-                'required',
+                'nullable',
                 'string',
             ],
             'tanggal_akhir' => [
@@ -81,7 +67,23 @@ class StoreESignRequest extends FormRequest
                 'string',
                 'max:1000',
             ],
+            'send_now' => [
+                'nullable',
+                'in:0,1',
+            ],
         ];
+
+        if ($multi) {
+            // Multi-surat: wajib ada daftar penerima
+            $rules['recipients'] = ['required', 'array', 'min:1'];
+            $rules['recipients.*.employee_id'] = ['required', 'integer', 'exists:employees,id'];
+            $rules['recipients.*.content'] = ['nullable', 'string'];
+        } else {
+            // Surat tunggal: satu employee_id
+            $rules['employee_id'] = ['required', 'integer', 'exists:employees,id'];
+        }
+
+        return $rules;
     }
 
     /**
@@ -92,6 +94,10 @@ class StoreESignRequest extends FormRequest
         return [
             'employee_id.required' => 'Pilih employee terlebih dahulu.',
             'employee_id.exists' => 'Employee yang dipilih tidak valid.',
+            'recipients.required' => 'Pilih minimal 1 karyawan penerima untuk multi-surat.',
+            'recipients.min' => 'Pilih minimal 1 karyawan penerima untuk multi-surat.',
+            'recipients.*.employee_id.required' => 'Pilih karyawan penerima.',
+            'recipients.*.employee_id.exists' => 'Karyawan penerima tidak valid.',
             'letter_type_id.required' => 'Jenis surat tidak valid.',
             'letter_type_id.exists' => 'Jenis surat tidak ditemukan.',
             'template_id.required' => 'Template surat wajib dipilih.',

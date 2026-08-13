@@ -396,6 +396,7 @@
                         </div>
                     </li>
                     @endcan
+                    @can('e-sign.menu')
                     <li class="nav-item {{ request()->is('e-sign*') ? 'active menu-open' : '' }}">
                         <a class="nav-link menu-link {{ request()->is('e-sign*') ? 'active' : '' }}" href="#sidebarESign" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarESign">
                             <i class="ri-file-text-line"></i> <span data-key="t-e-sign">E-Sign Management</span>
@@ -414,7 +415,8 @@
                                 </li>
                             </ul>
                         </div>
-                    </li>                    
+                    </li>
+                    @endcan
                     @canany(['itsm.it-asset.read', 'itsm.asset-type.read', 'itsm.asset-disposal.read', 'itsm.service-desk.read', 'itsm.knowledge-base.read', 'itsm.change-management.read'])                        
                         <li class="nav-item {{ 
                             request()->is('administrator/it-asset*') || 

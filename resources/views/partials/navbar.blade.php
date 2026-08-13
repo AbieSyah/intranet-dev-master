@@ -136,6 +136,14 @@
                 </a>
             </li>
             @endcan
+            @can('e-sign.profile')
+            <li class="nav-item">
+                <a class="nav-link fs-14 {{ request()->is('mye-sign*') ? 'active' : '' }}"
+                    href="{{ route('e-sign.profile-index') }}">
+                    E-Sign
+                </a>
+            </li>
+            @endcan
         @endcan
     </ul>
 </div>

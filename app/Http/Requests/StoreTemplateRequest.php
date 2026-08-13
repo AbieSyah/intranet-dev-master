@@ -24,6 +24,9 @@ class StoreTemplateRequest extends FormRequest
             'template_type' => ['required', 'string', Rule::in(['editor', 'docx', 'pdf', 'html'])],
             'file' => ['nullable', 'file', 'mimes:docx,pdf', 'max:10240'],
             'is_active' => ['boolean'],
+            'sign_1' => ['boolean'],
+            'sign_2' => ['boolean'],
+            'sign_3' => ['boolean'],
         ];
     }
 

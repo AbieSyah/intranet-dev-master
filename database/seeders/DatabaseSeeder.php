@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(DemoDataSeeder::class);
         $this->call(EmployeeSeeder::class);
+        $this->call(PermissionSeeder::class);
         $this->call(ESignTemplateSeeder::class);
     }
 }

@@ -15,11 +15,18 @@
     $signee1 = $doc->employee1_signee_id ? \App\Models\Employee::with('position')->find($doc->employee1_signee_id) : null;
     $signee2 = $doc->employee2_signee_id ? \App\Models\Employee::with('position')->find($doc->employee2_signee_id) : null;
     $signee3 = $doc->employee3_signee_id ? \App\Models\Employee::with('position')->find($doc->employee3_signee_id) : null;
-    $hasSign1 = $signee1 || $doc->employee1_signee_id;
-    $hasSign2 = $signee2 || $doc->employee2_signee_id;
-    $hasSign3 = $signee3 || $doc->employee3_signee_id;
+
+    // Hanya tampilkan slot yang aktif di template (default: semua)
+    $signActive = $signActive ?? [1, 2, 3];
+
+    $hasSign1 = in_array(1, $signActive) && ($signee1 || $doc->employee1_signee_id);
+    $hasSign2 = in_array(2, $signActive) && ($signee2 || $doc->employee2_signee_id);
+    $hasSign3 = in_array(3, $signActive) && ($signee3 || $doc->employee3_signee_id);
+
+    $signCount = ($hasSign1 ? 1 : 0) + ($hasSign2 ? 1 : 0) + ($hasSign3 ? 1 : 0);
+    $signClass = $signCount === 1 ? 'sign-one' : ($signCount === 2 ? 'sign-two' : 'sign-three');
 @endphp
-<div class="signature-area" style="display:flex;flex-wrap:wrap;gap:32px;justify-content:center;margin-top:32px;">
+<div class="signature-area {{ $signClass }} esign-signature-area" style="display:flex;flex-wrap:wrap;gap:24px;margin-top:18px;">
     @if($hasSign1)
     <div class="signature-box" style="text-align:center;min-width:160px;">
         <div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#1e293b;">Sign 1</div>

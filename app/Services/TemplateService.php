@@ -12,6 +12,7 @@
 
     class TemplateService
     {
+
         /**
          * Get all templates, optionally filtered by letter_type_id and search keyword.
          */
@@ -87,6 +88,9 @@
                     'is_active' => $data['is_active'] ?? false,
                     'created_by' => Auth::id(),
                     'updated_by' => Auth::id(),
+                    'sign_1' => $data['sign_1'] ?? true,
+                    'sign_2' => $data['sign_2'] ?? false,
+                    'sign_3' => $data['sign_3'] ?? false,
                 ]);
 
                 return $template->fresh('creator', 'updater', 'letterType');
@@ -128,6 +132,9 @@
                     'page_margin_left' => $data['page_margin_left'] ?? $template->page_margin_left ?? $layoutDefaults['page_margin_left'],
                     'page_margin_right' => $data['page_margin_right'] ?? $template->page_margin_right ?? $layoutDefaults['page_margin_right'],
                     'page_size' => $data['page_size'] ?? $template->page_size ?? $layoutDefaults['page_size'],
+                    'sign_1' => $data['sign_1'] ?? $template->sign_1 ?? true,
+                    'sign_2' => $data['sign_2'] ?? $template->sign_2 ?? false,
+                    'sign_3' => $data['sign_3'] ?? $template->sign_3 ?? false,
                 ];
 
                 // Handle file upload

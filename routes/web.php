@@ -451,6 +451,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Letter Types (Jenis Surat) — includes full template management
     Route::prefix('e-sign/jenis-surat')
+        ->middleware('can:e-sign.menu')
         ->controller(\App\Http\Controllers\ESign\LetterTypeController::class)
         ->group(function () {
             // Letter Type CRUD
@@ -475,6 +476,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Template Surat — Template management (before wildcard e-sign routes)
     Route::prefix('e-sign/templates')
+        ->middleware('can:e-sign.menu')
         ->controller(\App\Http\Controllers\ESign\TemplateController::class)
         ->group(function () {
             Route::get('/', 'index')->name('e-sign.templates');
@@ -488,9 +490,9 @@ Route::group(['middleware' => 'auth'], function () {
         });
 
     Route::prefix('e-sign')
+        ->middleware('can:e-sign.menu')
         ->controller(\App\Http\Controllers\ESign\ESignController::class)
         ->group(function () {
-            Route::get('/dashboard', 'dashboard')->name('e-sign.dashboard');
             Route::get('/daftar-surat', 'daftarSurat')->name('e-sign.daftar-surat');
 
             // Create Select (pilih jenis surat & template)
@@ -504,6 +506,11 @@ Route::group(['middleware' => 'auth'], function () {
             // Send to Employee
             Route::post('/{esign}/send', 'send')->name('e-sign.send');
 
+            // Multi-surat batch
+            Route::get('/batch/{batch}/edit', 'editBatch')->name('e-sign.batch.edit');
+            Route::put('/batch/{batch}', 'updateBatch')->name('e-sign.batch.update');
+            Route::post('/batch/{batch}/send', 'sendBatch')->name('e-sign.batch.send');
+
             // Delete
             Route::delete('/{esign}', 'destroy')->name('e-sign.destroy');
 
@@ -514,6 +521,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // Employee Profile E-Sign
     Route::prefix('mye-sign')
+        ->middleware('can:e-sign.profile')
         ->controller(\App\Http\Controllers\ESign\ESignController::class)
         ->group(function () {
             Route::get('/index', 'profileIndex')->name('e-sign.profile-index');

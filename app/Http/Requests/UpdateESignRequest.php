@@ -47,10 +47,23 @@ class UpdateESignRequest extends FormRequest
                 'nullable',
                 'string',
             ],
+            'title' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'content' => [
+                'nullable',
+                'string',
+            ],
             'description' => [
                 'nullable',
                 'string',
                 'max:1000',
+            ],
+            'send_now' => [
+                'nullable',
+                'in:0,1',
             ],
         ];
     }
