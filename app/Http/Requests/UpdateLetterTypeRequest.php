@@ -23,6 +23,7 @@ class UpdateLetterTypeRequest extends FormRequest
             'icon' => ['nullable', 'string', 'max:50'],
             'color' => ['nullable', 'string', 'max:20'],
             'is_active' => ['boolean'],
+            'multi_enabled' => ['boolean'],
         ];
     }
 

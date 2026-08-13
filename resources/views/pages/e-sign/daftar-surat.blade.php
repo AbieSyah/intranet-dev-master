@@ -53,6 +53,13 @@
 </div>
 @endif
 
+@if(session('error'))
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="ri-error-warning-line me-1"></i> {{ session('error') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
 @if($currentStatus)
 <div class="row mb-3">
     <div class="col-12">
@@ -75,6 +82,14 @@
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <form method="GET" action="{{ route('e-sign.daftar-surat') }}" class="d-flex align-items-center gap-2">
+                        <select name="status" class="form-select form-select-sm" style="min-width:150px;">
+                            <option value=""> Semua Status </option>
+                            @foreach($statusFilterOptions as $val => $label)
+                            <option value="{{ $val }}" {{ ($currentStatus ?? '') == $val ? 'selected' : '' }}>
+                                {{ $label }}
+                            </option>
+                            @endforeach
+                        </select>
                         <select name="jenis_surat" class="form-select form-select-sm" style="min-width:140px;">
                             <option value=""> Semua Jenis Surat </option>
                             @foreach($letterTypes as $lt)
@@ -107,6 +122,7 @@
                 <table class="table table-striped dt-responsive nowrap w-100 table-esign" id="tableDaftarSurat">
                     <thead>
                         <tr>
+                            <th style="width:36px;text-align:center;"><input type="checkbox" id="checkAllDraft" title="Pilih semua draft di halaman ini"></th>
                             <th style="width:40px;"></th>
                             <th>No</th>
                             <th>Nomor Surat</th>
@@ -132,12 +148,15 @@
                             $slug = $slugMap[$doc['jenis_surat']] ?? 'pkwt';
                             $badge = 'secondary';
                             if ($doc['status'] === 'Completed') $badge = 'success';
-                            elseif (in_array($doc['status'], ['Sign 1', 'Sign 2', 'Sign 3'])) $badge = 'info';
+                            elseif (in_array($doc['status'], ['Menunggu Sign 1', 'Menunggu Sign 2', 'Menunggu Sign 3'])) $badge = 'info';
                             elseif ($doc['status'] === 'Draft') $badge = 'warning';
                             elseif ($doc['status'] === 'Rejected') $badge = 'danger';
                             $rowId = 'detail-' . $doc['id'];
                         @endphp
                         <tr class="main-row" data-target="{{ $rowId }}">
+                            <td class="text-center">
+                                <input type="checkbox" class="draft-check" value="{{ $doc['id'] }}" {{ $doc['status_raw'] === 'draft' ? '' : 'disabled' }}>
+                            </td>
                             <td class="text-center">
                                 <i class="ri-arrow-right-s-line btn-expand fs-18" data-target="{{ $rowId }}"></i>
                             </td>
@@ -160,7 +179,7 @@
                             </td>
                         </tr>
                         <tr class="expand-row" id="{{ $rowId }}">
-                            <td colspan="8">
+                            <td colspan="9">
                                 <div class="row">
                                     <div class="col-md-6">
                                         <h6 class="fw-semibold mb-3"><i class="ri-file-info-line me-1"></i> Informasi Employee</h6>
@@ -176,11 +195,22 @@
                                         </div>
                                     </div>
                                     <div class="col-md-6">
-                                        <h6 class="fw-semibold mb-3"><i class="ri-signature-line me-1"></i> Signees</h6>
+                                        <h6 class="fw-semibold mb-3"><i class="ri-signature-line me-1"></i> Status Tanda Tangan ({{ count($doc['signees']) }} Sign)</h6>
                                         <ul class="signee-list">
-                                            <li><strong>Sign 1:</strong> {{ $doc['signee1_name'] }}</li>
-                                            <li><strong>Sign 2:</strong> {{ $doc['signee2_name'] }}</li>
-                                            <li><strong>Sign 3:</strong> {{ $doc['signee3_name'] }}</li>
+                                            @foreach($doc['signees'] as $signee)
+                                            <li>
+                                                <strong>Sign {{ $signee['level'] }}:</strong> {{ $signee['name'] }}
+                                                @if(!empty($signee['signed_at']))
+                                                <span class="badge bg-success-subtle text-success ms-1">
+                                                    <i class="ri-check-line"></i> Sudah ttd {{ \Carbon\Carbon::parse($signee['signed_at'])->format('d M Y, H:i') }}
+                                                </span>
+                                                @else
+                                                <span class="badge bg-light text-muted ms-1">
+                                                    <i class="ri-time-line"></i> Belum
+                                                </span>
+                                                @endif
+                                            </li>
+                                            @endforeach
                                         </ul>
                                         <div class="mt-3">
                                             @if($doc['status_raw'] === 'draft')
@@ -218,6 +248,26 @@
         </div>
     </div>
 </div>
+
+<form method="POST" action="{{ route('e-sign.send-bulk') }}" id="formSendBulk">
+    @csrf
+    <div class="bulk-bar" id="bulkBar" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:1050;background:#ffffff;box-shadow:0 -4px 16px rgba(0,0,0,.12);border-top:2px solid #0ab39c;padding:10px 24px;">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="text-muted">
+                <i class="ri-checkbox-multiple-line me-1 text-primary"></i>
+                <strong id="bulkCount">0</strong> surat draft terpilih
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-light" id="btnClearSelection">
+                    <i class="ri-close-line me-1"></i>Batal
+                </button>
+                <button type="submit" class="btn btn-sm btn-info" onclick="return confirm('Kirim surat draft terpilih ke employee masing-masing?');">
+                    <i class="ri-send-plane-line me-1"></i> Kirim ke Employee
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
 @endsection
 
 @section('javascript')
@@ -236,9 +286,42 @@
 
         // Expand/collapse on row click (except action column)
         $(document).on('click', '.main-row td', function(e) {
-            if ($(e.target).closest('a, button, .btn-expand').length) return;
+            if ($(e.target).closest('a, button, .btn-expand, input').length) return;
             var $icon = $(this).closest('tr').find('.btn-expand');
             $icon.trigger('click');
+        });
+
+        // Bulk send draft selection
+        function updateBulkSelection() {
+            var checked = $('.draft-check:checked');
+            $('#bulkCount').text(checked.length);
+            $('#formSendBulk input[name="ids[]"]').remove();
+            checked.each(function() {
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'ids[]',
+                    value: $(this).val()
+                }).appendTo('#formSendBulk');
+            });
+            $('#bulkBar').toggle(checked.length > 0);
+        }
+
+        $('#checkAllDraft').on('change', function() {
+            $('.draft-check:not(:disabled)').prop('checked', this.checked);
+            updateBulkSelection();
+        });
+
+        $(document).on('change', '.draft-check', function() {
+            var all = $('.draft-check:not(:disabled)').length > 0 &&
+                      $('.draft-check:checked').length === $('.draft-check:not(:disabled)').length;
+            $('#checkAllDraft').prop('checked', all);
+            updateBulkSelection();
+        });
+
+        $('#btnClearSelection').on('click', function() {
+            $('.draft-check').prop('checked', false);
+            $('#checkAllDraft').prop('checked', false);
+            updateBulkSelection();
         });
     });
 </script>

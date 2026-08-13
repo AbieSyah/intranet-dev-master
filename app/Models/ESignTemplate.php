@@ -29,10 +29,16 @@ class ESignTemplate extends Model
         'sign_1',
         'sign_2',
         'sign_3',
+        'sign_1_is_recipient',
+        'sign_2_is_recipient',
+        'sign_3_is_recipient',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'sign_1_is_recipient' => 'boolean',
+        'sign_2_is_recipient' => 'boolean',
+        'sign_3_is_recipient' => 'boolean',
         'version' => 'integer',
         'page_margin_top' => 'integer',
         'page_margin_bottom' => 'integer',
@@ -85,7 +91,31 @@ class ESignTemplate extends Model
     public function getSignCountAttribute(): int
     {
         return count($this->sign_slots);
-    }    public function getStatusBadgeAttribute()
+    }
+
+    /**
+     * Slot tanda tangan yang berperan sebagai penerima (berubah per salinan pada multi-surat).
+     * Maksimal 1 slot; null bila tidak ada slot penerima.
+     */
+    public function getRecipientSignAttribute(): ?int
+    {
+        foreach ([1, 2, 3] as $slot) {
+            if ($this->getAttribute("sign_{$slot}_is_recipient") && $this->getAttribute("sign_{$slot}")) {
+                return $slot;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Slot tanda tangan aktif yang bersifat tetap (penandatangan sama untuk semua salinan).
+     */
+    public function getFixedSignSlotsAttribute(): array
+    {
+        $recipient = $this->recipient_sign;
+        return array_values(array_filter($this->sign_slots, fn ($s) => $s !== $recipient));
+    }
+    public function getStatusBadgeAttribute()
     {
         if ($this->is_active) {
             return '<span class="badge bg-success">Aktif</span>';

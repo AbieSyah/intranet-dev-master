@@ -192,8 +192,6 @@ class ESignService
                 abort(422, 'Minimal harus ada 1 karyawan penerima untuk multi-surat.');
             }
 
-            $sign1EmployeeId = $data['employee1_signee_id'] ?? Auth::user()->employee_id ?? null;
-
             $batch = ESignBatch::create([
                 'jenis_surat_slug' => $data['jenis_surat_slug'],
                 'letter_type_id'   => $data['letter_type_id'] ?? null,
@@ -209,10 +207,13 @@ class ESignService
                     continue;
                 }
 
+                $signees = $this->resolveBatchSignees($data, $employeeId);
+
                 ESign::create([
                     'employee_id'         => $employeeId,
-                    'employee1_signee_id' => $sign1EmployeeId,
-                    'employee2_signee_id' => $employeeId,
+                    'employee1_signee_id' => $signees[1],
+                    'employee2_signee_id' => $signees[2],
+                    'employee3_signee_id' => $signees[3],
                     'letter_type_id'      => $data['letter_type_id'] ?? null,
                     'template_id'         => $data['template_id'] ?? null,
                     'batch_id'            => $batch->id,
@@ -254,6 +255,33 @@ class ESignService
     }
 
     /**
+     * Resolusi penandatangan per slot untuk satu penerima pada multi-surat.
+     *
+     * Slot penerima (dari template `recipient_sign`) diisi oleh penerima itu sendiri;
+     * slot aktif lain diisi penandatangan tetap dari form (employee{slot}_signee_id);
+     * slot tidak aktif bernilai null.
+     *
+     * @return array{1: int|null, 2: int|null, 3: int|null}
+     */
+    private function resolveBatchSignees(array $data, int $employeeId): array
+    {
+        $template = ESignTemplate::find($data['template_id'] ?? null);
+        $slots    = $template ? $template->sign_slots : [1];
+        $recSlot  = $template ? $template->recipient_sign : null;
+
+        $signees = [1 => null, 2 => null, 3 => null];
+        foreach ($slots as $slot) {
+            if ($slot === $recSlot) {
+                $signees[$slot] = $employeeId;
+            } else {
+                $signees[$slot] = $data["employee{$slot}_signee_id"] ?? null;
+            }
+        }
+
+        return $signees;
+    }
+
+    /**
      * Update a multi-surat batch draft (masih status draft).
      *
      * Mensinkronkan daftar penerima & isi surat ke dokumen-dokumen batch.
@@ -272,8 +300,6 @@ class ESignService
                 abort(422, 'Minimal harus ada 1 karyawan penerima untuk multi-surat.');
             }
 
-            $sign1EmployeeId = $data['employee1_signee_id'] ?? Auth::user()->employee_id ?? null;
-
             $existing = $batch->documents()->get()->keyBy('id');
             $sub = 1;
             $newDocIds = [];
@@ -284,12 +310,16 @@ class ESignService
                     continue;
                 }
 
+                $signees = $this->resolveBatchSignees($data, $employeeId);
+
                 // Cari dokumen batch dengan employee yang sama
                 $doc = $batch->documents()->where('employee_id', $employeeId)->first();
 
                 if ($doc) {
                     $doc->update([
-                        'employee1_signee_id' => $sign1EmployeeId,
+                        'employee1_signee_id' => $signees[1],
+                        'employee2_signee_id' => $signees[2],
+                        'employee3_signee_id' => $signees[3],
                         'content'             => $r['content'] ?? $doc->content,
                         'title'               => $r['title'] ?? $doc->title,
                         'document_name'       => $r['title'] ?? $doc->document_name,
@@ -301,8 +331,9 @@ class ESignService
                 } else {
                     $doc = ESign::create([
                         'employee_id'         => $employeeId,
-                        'employee1_signee_id' => $sign1EmployeeId,
-                        'employee2_signee_id' => $employeeId,
+                        'employee1_signee_id' => $signees[1],
+                        'employee2_signee_id' => $signees[2],
+                        'employee3_signee_id' => $signees[3],
                         'letter_type_id'      => $data['letter_type_id'] ?? $batch->letter_type_id,
                         'template_id'         => $data['template_id'] ?? $batch->template_id,
                         'batch_id'            => $batch->id,
@@ -580,6 +611,32 @@ class ESignService
 
             return $eSign;
         });
+    }
+
+    /**
+     * Kirim beberapa draft surat sekaligus ke employee masing-masing.
+     *
+     * Setiap surat draft yang dipilih dikirim per surat (individu) melalui
+     * sendToEmployee(): generate nomor surat, status -> sign_1, email ke Sign 1.
+     * Hanya surat dengan status draft yang benar-benar dikirim.
+     *
+     * @param  int[]  $ids
+     * @return int  Jumlah surat yang berhasil dikirim.
+     */
+    public function sendSelectedToEmployees(array $ids): int
+    {
+        $esigns = ESign::query()
+            ->whereIn('id', $ids)
+            ->get()
+            ->filter(fn (ESign $e) => $e->canBeSent());
+
+        $count = 0;
+        foreach ($esigns as $eSign) {
+            $this->sendToEmployee($eSign);
+            $count++;
+        }
+
+        return $count;
     }
 
     /**

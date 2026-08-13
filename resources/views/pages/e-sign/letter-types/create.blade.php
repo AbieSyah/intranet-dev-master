@@ -132,6 +132,14 @@
                         </div>
                         <small class="text-muted">Nonaktifkan jika jenis surat tidak digunakan</small>
                     </div>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" name="multi_enabled" class="form-check-input" value="1" id="multiEnabled" {{ old('multi_enabled', '1') ? 'checked' : '' }}>
+                            <label class="form-check-label" for="multiEnabled">Aktifkan Multi-Surat</label>
+                        </div>
+                        <small class="text-muted">Izinkan jenis surat ini dikirim ke banyak penerima sekaligus</small>
+                    </div>
                 </div>
             </div>
 

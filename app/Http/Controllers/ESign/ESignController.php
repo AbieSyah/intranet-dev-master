@@ -20,22 +20,22 @@ class ESignController extends Controller
     {
         $status = $request->query('status');
 
-        $statusFilterMap = [
-            'Draft' => 'draft',
-            'Sign 1' => 'sign_1',
-            'Sign 2' => 'sign_2',
-            'Sign 3' => 'sign_3',
-            'Completed' => 'completed',
-            'Rejected' => 'rejected_employee',
+        $statusFilterOptions = [
+            'draft' => 'Draft',
+            'sign_1' => 'Menunggu Sign 1',
+            'sign_2' => 'Menunggu Sign 2',
+            'sign_3' => 'Menunggu Sign 3',
+            'completed' => 'Completed',
+            'rejected_employee' => 'Rejected',
         ];
 
         $jenisSurat = $request->query('jenis_surat');
         $search = $request->query('search');
 
         /** @var \Illuminate\Pagination\LengthAwarePaginator $documents */
-        $documents = ESign::with('employee.department', 'employee.position')
-            ->when($status && isset($statusFilterMap[$status]), function ($query) use ($status, $statusFilterMap) {
-                return $query->where('status', $statusFilterMap[$status]);
+        $documents = ESign::with('employee.department', 'employee.position', 'template', 'letterType')
+            ->when($status && isset($statusFilterOptions[$status]), function ($query) use ($status) {
+                return $query->where('status', $status);
             })
             ->when($jenisSurat, function ($query) use ($jenisSurat) {
                 return $query->where('jenis_surat_slug', $jenisSurat);
@@ -43,9 +43,13 @@ class ESignController extends Controller
             ->when($search, function ($query) use ($search) {
                 return $query->where(function ($q) use ($search) {
                     $q->where('nomor_surat', 'LIKE', '%' . $search . '%')
+                      ->orWhere('tanggal_mulai', 'LIKE', '%' . $search . '%')
                       ->orWhereHas('employee', function ($eq) use ($search) {
                           $eq->where('fullname', 'LIKE', '%' . $search . '%')
                              ->orWhere('nik', 'LIKE', '%' . $search . '%');
+                      })
+                      ->orWhereHas('template', function ($tq) use ($search) {
+                          $tq->where('title', 'LIKE', '%' . $search . '%');
                       });
                 });
             })
@@ -69,7 +73,7 @@ class ESignController extends Controller
         $letterTypes = \App\Models\LetterType::orderBy('name')->get();
         $currentJenisSurat = $jenisSurat;
 
-        return view('pages.e-sign.daftar-surat', compact('documents', 'counts', 'currentStatus', 'letterTypes', 'currentJenisSurat', 'search'));
+        return view('pages.e-sign.daftar-surat', compact('documents', 'counts', 'currentStatus', 'letterTypes', 'currentJenisSurat', 'search', 'statusFilterOptions'));
     }
 
     /**
@@ -326,9 +330,9 @@ class ESignController extends Controller
     {
         $statusDisplayMap = [
             'draft' => 'Draft',
-            'sign_1' => 'Sign 1',
-            'sign_2' => 'Sign 2',
-            'sign_3' => 'Sign 3',
+            'sign_1' => 'Menunggu Sign 1',
+            'sign_2' => 'Menunggu Sign 2',
+            'sign_3' => 'Menunggu Sign 3',
             'completed' => 'Completed',
             'rejected_employee' => 'Rejected',
         ];
@@ -356,6 +360,17 @@ class ESignController extends Controller
             'signee1_name' => $signee1->fullname ?? '-',
             'signee2_name' => $signee2->fullname ?? '-',
             'signee3_name' => $signee3->fullname ?? '-',
+            'signees' => collect($doc->template ? $doc->template->sign_slots : [1])
+                ->map(function ($level) use ($doc) {
+                    $signee = $doc->{'employee' . $level . '_signee_id'}
+                        ? \App\Models\Employee::find($doc->{'employee' . $level . '_signee_id'})
+                        : null;
+                    return [
+                        'level' => (int) $level,
+                        'name' => $signee->fullname ?? '-',
+                        'signed_at' => $doc->{'employee' . $level . '_signed_at'},
+                    ];
+                })->values()->all(),
             'is_batch' => !empty($doc->batch_id),
             'batch_id' => $doc->batch_id,
             'nomor_sub' => $doc->nomor_sub,
@@ -438,6 +453,25 @@ class ESignController extends Controller
         return redirect()
             ->route('e-sign.preview', $esign->id)
             ->with('success', 'Surat berhasil dikirim ke Employee.');
+    }
+
+    /**
+     * Kirim beberapa draft surat sekaligus ke employee masing-masing.
+     */
+    public function sendBulk(Request $request, ESignService $esignService)
+    {
+        $ids = $request->input('ids', []);
+        if (!is_array($ids) || empty($ids)) {
+            return redirect()
+                ->route('e-sign.daftar-surat')
+                ->with('error', 'Tidak ada surat yang dipilih untuk dikirim.');
+        }
+
+        $count = $esignService->sendSelectedToEmployees(array_map('intval', $ids));
+
+        return redirect()
+            ->route('e-sign.daftar-surat')
+            ->with('success', $count . ' surat berhasil dikirim ke Employee.');
     }
 
     /**

@@ -692,7 +692,10 @@ function getEditorContent(editor) {
         html = exportContent(editor, 'HTML');
     } catch (err) {
         console.error('RoosterJS getContent error:', err);
-        html = '';
+        // Fallback: baca langsung DOM editor bila export gagal, agar konten tidak kosong
+        // dan validasi (mis. cek @{{nomor_surat}}) tetap berjalan benar saat simpan.
+        const editable = document.getElementById(EDITOR_ID);
+        html = editable ? editable.innerHTML : '';
     }
     appendSignaturePlaceholder();
     return html;

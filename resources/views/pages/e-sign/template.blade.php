@@ -164,6 +164,12 @@
             font-weight: 600;
             text-align: right;
         }
+        .esign-signature-area {
+            display: flex !important;
+            align-items: flex-start;
+            justify-content: space-between;
+            page-break-inside: avoid;
+        }
     </style>
 @endsection
 
@@ -258,11 +264,11 @@
                     {{-- Toggle Multisurat --}}
                     <div class="mb-3 p-2 rounded border {{ in_array($mode, ['create','edit-batch']) ? '' : 'bg-light' }}" style="{{ in_array($mode, ['create','edit-batch']) ? 'border-color:#dee2e6;' : '' }}">
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="toggleMultiSurat" @if($mode === 'create' || $mode === 'edit-batch') {{ $mode === 'edit-batch' ? 'checked' : '' }} @else disabled @endif>
+                            <input class="form-check-input" type="checkbox" id="toggleMultiSurat" @if(($mode === 'create' || $mode === 'edit-batch') && ($type->multi_enabled ?? true)) {{ $mode === 'edit-batch' ? 'checked' : '' }} @else disabled @endif>
                             <label class="form-check-label fw-semibold" for="toggleMultiSurat">Multisurat</label>
                         </div>
                         <small class="text-muted d-block mt-1">
-                            {{ in_array($mode, ['create','edit-batch']) ? 'Kirim 1 surat ke banyak karyawan sekaligus (tiap karyawan mendapat salinan dengan datanya sendiri).' : 'Mode multisurat hanya tersedia saat membuat surat baru.' }}
+                            {{ ($mode === 'create' || $mode === 'edit-batch') ? ((($type->multi_enabled ?? true)) ? 'Kirim 1 surat ke banyak karyawan sekaligus (tiap karyawan mendapat salinan dengan datanya sendiri).' : 'Jenis surat ini tidak mengaktifkan mode multisurat.') : 'Mode multisurat hanya tersedia saat membuat surat baru.' }}
                         </small>
                         <div class="alert alert-info py-2 mt-2 mb-0" id="multiHint" style="{{ $mode === 'edit-batch' ? '' : 'display:none;' }}font-size:12px;">
                             <i class="ri-stack-line me-1"></i>
@@ -342,19 +348,28 @@
                     </div>
 
                     {{-- Pihak Pertama & Penerima (mode multisurat) --}}
+                    @php
+                        $multiRecSlot = $activeTemplate ? $activeTemplate->recipient_sign : null;
+                        $multiFixedSlots = $activeTemplate ? $activeTemplate->fixed_sign_slots : [];
+                    @endphp
                     <div id="multiEmployeeWrap" style="display:none;">
+                        @foreach($multiFixedSlots as $fs)
                         <div class="mb-3">
-                            <label class="form-label">Pihak Pertama / Dari Perusahaan</label>
-                            <select class="form-control" id="selectPihakPertama" style="width: 100%;">
-                                <option value="">— Pilih Pihak Pertama —</option>
+                            <label class="form-label">Penandatangan Tetap (Sign {{ $fs }}) <small class="text-muted">(sama untuk semua salinan)</small></label>
+                            <select class="form-control fixed-sign-select" id="selectFixedSign{{ $fs }}" data-sign="{{ $fs }}" style="width: 100%;">
+                                <option value="">— Pilih Penandatangan —</option>
                             </select>
-                            <small class="text-muted">Penandatangan pihak pertama / dari perusahaan (Sign 1).</small>
                         </div>
+                        @endforeach
                         <div class="mb-3">
                             <label class="form-label">Penerima <small class="text-muted">(bisa lebih dari satu)</small></label>
                             <select class="form-control" id="selectPenerima" style="width: 100%;" multiple>
                             </select>
-                            <small class="text-muted">Pilih beberapa penerima. Tiap penerima diberi nomor urut, dan menjadi pihak kedua (Sign 2) pada salinannya masing-masing.</small>
+                            <small class="text-muted">Tiap penerima diberi nomor urut dan menjadi penandatangan "Penerima" pada salinannya masing-masing.</small>
+                        </div>
+                        <div class="alert alert-light py-2 mb-0" style="font-size:11px;">
+                            <i class="ri-information-line me-1"></i>
+                            Slot Penerima: {{ $multiRecSlot ? ('Sign ' . $multiRecSlot) : '— (tidak ada; penerima tidak menandatangani)' }}.
                         </div>
                     </div>
 
@@ -501,25 +516,6 @@
                         @endif
                     </div>
 
-                    {{-- Placeholder Inputs --}}
-                    <hr>
-                    <div id="placeholderInputs">
-                        <label class="form-label">Data Surat</label>
-                        @foreach($placeholders as $key => $desc)
-                            @if(in_array($key, $excludedPlaceholders))
-                                @continue
-                            @endif
-                        <div class="mb-2 placeholder-input">
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text" style="width:110px;"><code>@{{{{ $key }}}}</code></span>
-                                <input type="text" class="form-control placeholder-field"
-                                    data-placeholder="@{{{{ $key }}}}"
-                                    placeholder="{{ $desc }}">
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-
                     {{-- Keterangan --}}
                     <div class="mb-3">
                         <label class="form-label">Keterangan</label>
@@ -568,50 +564,98 @@
 
     // Slot tanda tangan aktif dari template (1=kanan, 2=kiri, 3=tengah)
     window.activeSigns = @json($activeTemplate ? $activeTemplate->sign_slots : [1]);
+    window.multiRecSlot = @json($multiRecSlot);
 
     // Daftar field employee untuk placeholder (employee_/employee1_/2_/3_)
     var empFields = @json($employeePlaceholderFields);
 
     $(document).ready(function() {
+        // ===== Inisialisasi select2 karyawan =====
+        // Search select2 mencocokkan SELURUH data karyawan: NIK, nama, departemen,
+        // jabatan, dan semua kolom lain di tabel employees (via data-emp JSON) —
+        // tanpa field terpisah.
+        function employeeMatcher(params, data) {
+            if ($.trim(params.term) === '') return data;
+            if (typeof data.text === 'undefined') return null;
+            var term = params.term.toLowerCase();
+
+            var haystack = (data.text || '').toLowerCase();
+            if (data.element) {
+                var $el = $(data.element);
+                // Semua atribut data-* (nik, nama, dept, jabatan, email, dsb.)
+                $.each($el.data(), function(k, v) {
+                    if (v != null) haystack += ' ' + String(v).toLowerCase();
+                });
+                // data-emp = JSON lengkap seluruh kolom employee
+                var empRaw = $el.attr('data-emp');
+                if (empRaw) {
+                    try {
+                        var emp = JSON.parse(empRaw);
+                        $.each(emp, function(k, v) {
+                            if (v != null) haystack += ' ' + String(v).toLowerCase();
+                        });
+                    } catch(e) {}
+                }
+            }
+            return haystack.indexOf(term) > -1 ? data : null;
+        }
+
         // Init Select2 multiple untuk employee (mode single / non-multisurat)
         // Urutan pemilihan menentukan peran: pertama = pihak pertama (Sign 1), kedua = pihak kedua (Sign 2).
-        $('#selectEmployee').select2({
-            placeholder: 'Cari berdasarkan NIK atau Nama...',
-            allowClear: true,
-            width: '100%',
-            templateSelection: function(data, container) {
-                if (!data.id) return data.text;
-                var values = $('#selectEmployee').val() || [];
-                var idx = values.indexOf(String(data.id));
-                if (idx === -1) return data.text;
-                var roleLabel = idx === 0 ? 'Pihak Pertama' : (idx === 1 ? 'Pihak Kedua' : 'Pihak ' + (idx + 1));
-                return $('<span title="' + roleLabel + '"><span class="badge bg-primary me-1" style="font-size:10px;">' + (idx + 1) + '</span>' + data.text + '</span>');
-            },
-        });
+        function initEmployeeSelect() {
+            $('#selectEmployee').select2({
+                placeholder: 'Cari berdasarkan NIK, Nama, atau Departemen...',
+                allowClear: true,
+                width: '100%',
+                matcher: employeeMatcher,
+                templateSelection: function(data, container) {
+                    if (!data.id) return data.text;
+                    var values = $('#selectEmployee').val() || [];
+                    var idx = values.indexOf(String(data.id));
+                    if (idx === -1) return data.text;
+                    var roleLabel = idx === 0 ? 'Pihak Pertama' : (idx === 1 ? 'Pihak Kedua' : 'Pihak ' + (idx + 1));
+                    return $('<span title="' + roleLabel + '"><span class="badge bg-primary me-1" style="font-size:10px;">' + (idx + 1) + '</span>' + data.text + '</span>');
+                },
+            });
+        }
 
-        // Inisialisasi field multisurat: Pihak Pertama (single) & Penerima (multiple, bernomor)
-        // Opsi di-clone dari selectEmployee agar data atribut (data-emp, dsb.) ikut terbawa.
-        $('#selectPihakPertama').append($('#selectEmployee option').clone());
+        function initFixedSignSelects() {
+            $('.fixed-sign-select').select2({
+                placeholder: 'Cari berdasarkan NIK, Nama, atau Departemen...',
+                allowClear: true,
+                width: '100%',
+                matcher: employeeMatcher,
+            });
+        }
+
+        function initPenerimaSelect() {
+            $('#selectPenerima').select2({
+                placeholder: 'Cari berdasarkan NIK, Nama, atau Departemen...',
+                allowClear: true,
+                width: '100%',
+                matcher: employeeMatcher,
+                templateSelection: function(data, container) {
+                    if (!data.id) return data.text;
+                    var values = $('#selectPenerima').val() || [];
+                    var idx = values.indexOf(String(data.id));
+                    if (idx === -1) return data.text;
+                    return $('<span><span class="badge bg-info me-1" style="font-size:10px;">P' + (idx + 1) + '</span>' + data.text + '</span>');
+                },
+            });
+        }
+
+        // Init awal semua select2
+        initEmployeeSelect();
+
+        // Inisialisasi field multisurat: Penandatangan Tetap (per slot) & Penerima (multiple, bernomor)
+        // Opsi di-clone dari selectEmployee agar data atribut (data-nik, dsb.) ikut terbawa.
+        $('.fixed-sign-select').each(function() {
+            $(this).append($('#selectEmployee option').clone());
+        });
         $('#selectPenerima').append($('#selectEmployee option').clone());
 
-        $('#selectPihakPertama').select2({
-            placeholder: 'Cari berdasarkan NIK atau Nama...',
-            allowClear: true,
-            width: '100%',
-        });
-
-        $('#selectPenerima').select2({
-            placeholder: 'Cari berdasarkan NIK atau Nama...',
-            allowClear: true,
-            width: '100%',
-            templateSelection: function(data, container) {
-                if (!data.id) return data.text;
-                var values = $('#selectPenerima').val() || [];
-                var idx = values.indexOf(String(data.id));
-                if (idx === -1) return data.text;
-                return $('<span><span class="badge bg-info me-1" style="font-size:10px;">P' + (idx + 1) + '</span>' + data.text + '</span>');
-            },
-        });
+        initFixedSignSelects();
+        initPenerimaSelect();
 
         // Init Select2 untuk sign employee
         $('.sign-employee-select').each(function() {
@@ -695,11 +739,10 @@
             renderPreview();
         });
 
-        // Pilih Pihak Pertama (multisurat) — menjadi Sign 1 / employee1_signee_id
-        $('#selectPihakPertama').on('change', function() {
-            var val = $(this).val() || '';
-            $('#inputEmployee1Id').val(val);
-            $('#inputEmployeeId').val(val);
+        // Pilih Penandatangan Tetap (multisurat) per slot → employee<slot>_signee_id
+        $(document).on('change', '.fixed-sign-select', function() {
+            var slot = $(this).data('sign');
+            $('#inputEmployee' + slot + 'Id').val($(this).val() || '');
             renderPreview();
         });
 
@@ -761,7 +804,7 @@
         detectSignFields();
         generateDateFields();
         initDatepicker();
-        renderPreview();
+        safeRenderPreview();
 
         // EDIT-BATCH: pre-select penerima batch & aktifkan mode multi
         @if($mode === 'edit-batch')
@@ -771,11 +814,13 @@
                 var opt = $('#selectPenerima option[value="' + id + '"]');
                 if (opt.length) opt.prop('selected', true);
             });
-            var ppId = @json($batchDocs->first()->employee1_signee_id ?? null);
-            if (ppId) {
-                var optPp = $('#selectPihakPertama option[value="' + ppId + '"]');
-                if (optPp.length) optPp.prop('selected', true);
+            @foreach($multiFixedSlots as $fs)
+            var f{{ $fs }}Id = @json($batchDocs->first()->{'employee'.$fs.'_signee_id'} ?? null);
+            if (f{{ $fs }}Id) {
+                var optF{{ $fs }} = $('#selectFixedSign{{ $fs }} option[value="' + f{{ $fs }}Id + '"]');
+                if (optF{{ $fs }}.length) optF{{ $fs }}.prop('selected', true);
             }
+            @endforeach
             $('#selectPenerima').trigger('change');
             $('#toggleMultiSurat').prop('checked', true).trigger('change');
         })();
@@ -806,13 +851,13 @@
                 }
             });
             syncEmployeeHidden();
-            renderPreview();
+            safeRenderPreview();
         })();
         @endif
 
         // Re-render setelah semua gambar (kop surat) termuat agar pagination akurat
         $(window).on('load', function() {
-            renderPreview();
+            safeRenderPreview();
         });
 
         // Re-generate date fields when template changes
@@ -821,7 +866,7 @@
                 detectSignFields();
                 generateDateFields();
                 initDatepicker();
-                renderPreview();
+                safeRenderPreview();
             }, 100);
         });
 
@@ -849,9 +894,11 @@
                 $form.find('input[name^="recipients["]').remove();
                 $form.find('textarea[name^="recipients["]').remove();
 
-                // Sync pihak pertama (Sign 1) ke employee1_signee_id
-                syncEmployeeHidden();
-                $('#inputEmployee1Id').val($('#selectPihakPertama').val() || '');
+                // Sync penandatangan tetap (per slot) ke employee<slot>_signee_id
+                $('.fixed-sign-select').each(function() {
+                    var slot = $(this).data('sign');
+                    $('#inputEmployee' + slot + 'Id').val($(this).val() || '');
+                });
 
                 var base = buildBaseContent();
                 var submitted = 0;
@@ -859,7 +906,7 @@
                     var empData = getEmployeeDataByIndex(i, '#selectPenerima');
                     var content = applyRecipientPlaceholders(base, empData);
                     if (content.indexOf('signature-box') === -1) {
-                        content += multiSignAreaHtml(empData);
+                        content += multiSignAreaHtml(empData, window.multiRecSlot);
                     }
                     $form.append('<input type="hidden" name="recipients[' + submitted + '][employee_id]" value="' + $(this).val() + '">');
                     // Simpan konten HTML mentah via textarea tersembunyi (TIDAK di-escape),
@@ -881,7 +928,7 @@
             }
 
             // Mode SINGLE
-            var rendered = renderPreview();
+            var rendered = safeRenderPreview();
             $('#inputContent').val(rendered || rawContent);
 
             // Sync hidden inputs for sign employees
@@ -1085,8 +1132,7 @@
         var logoUrl = '{{ url("") }}/assets/images/KOP-terbaru.png';
         function headerHtml() {
             return '<div class="company-header"><img src="' + logoUrl + '" alt="Kop Surat"></div>' +
-                '<div class="doc-title">' + title + '</div>' +
-                '<div class="doc-number">Nomor: _______________</div>';
+                '<div class="doc-title">' + title + '</div>';
         }
 
         function isMultiSurat() {
@@ -1104,7 +1150,7 @@
                 var empData = getEmployeeDataByIndex(i, '#selectPenerima');
                 var content = applyRecipientPlaceholders(base, empData);
                 if (content.indexOf('signature-box') === -1) {
-                    content += multiSignAreaHtml(empData);
+                    content += multiSignAreaHtml(empData, window.multiRecSlot);
                 }
                 var page = '<div class="doc-preview-page">' + headerHtml() + content + '</div>';
                 if (i < recipients.length - 1) page += '<div class="preview-page-break"></div>';
@@ -1141,9 +1187,9 @@
                 content = content.replace(new RegExp('\\{\\{' + escRegex(pair[0] + f) + '\\}\\}', 'g'), v);
             });
         });
-        content = content.replace(/\{\{sign_employee1\}\}/g, signEmpHtml('Sign 1', null, 1));
-        content = content.replace(/\{\{sign_employee2\}\}/g, signEmpHtml('Sign 2', null, 2));
-        content = content.replace(/\{\{sign_employee3\}\}/g, signEmpHtml('Sign 3', null, 3));
+        content = content.replace(/\{\{sign_employee1\}\}/g, '');
+        content = content.replace(/\{\{sign_employee2\}\}/g, '');
+        content = content.replace(/\{\{sign_employee3\}\}/g, '');
 
         if (content.indexOf('signature-box') === -1 && window.activeSigns && window.activeSigns.length) {
             content += buildSignAreaHtml();
@@ -1152,6 +1198,23 @@
         $('#renderedContent').html(htmlSingle).show();
         paginateDocument();
         return content;
+    }
+
+    // Render preview yang AMAN: error saat render/pagination (mis. DOM) TIDAK boleh
+    // menghentikan proses simpan draft. Bila error, dikembalikan konten dasar agar
+    // form tetap terisi dan bisa disimpan.
+    function safeRenderPreview() {
+        try {
+            return renderPreview();
+        } catch (err) {
+            console.error('Preview render error:', err);
+            try {
+                return buildBaseContent();
+            } catch (e2) {
+                console.error('buildBaseContent fallback error:', e2);
+                return rawContent || '';
+            }
+        }
     }
 
     function escRegex(str) {
@@ -1168,40 +1231,60 @@
             '<div style="font-size:11px;color:#6c757d;">' + (position || '_______________') + '</div></div>';
     }
 
-    // Replace placeholder employee untuk satu penerima (employee_/employee1_/2_/3_ → penerima)
+    // Ambil data penandatangan tetap untuk slot tertentu (dari select fixed-sign).
+    function getFixedSignData(slot) {
+        var sel = $('#selectFixedSign' + slot).find(':selected');
+        if (!sel.length || !sel.val()) return null;
+        return getEmployeeDataByIndex(0, '#selectFixedSign' + slot);
+    }
+
+    // Ambil data yang akan mengisi slot tanda tangan pada satu salinan multi-surat.
+    // Slot penerima (window.multiRecSlot) → data penerima salinan ini; slot lain → penandatangan tetap.
+    function getSlotData(slot, empData) {
+        if (slot === window.multiRecSlot) {
+            return empData || null;
+        }
+        var fixed = getFixedSignData(slot);
+        if (fixed) return fixed;
+        // Fallback HR untuk slot 1 (pihak perusahaan) bila belum dipilih.
+        if (slot === 1) {
+            return { fullname: '{{ optional(Auth::user()->employee)->fullname ?? "HR / Admin" }}', position: '{{ optional(Auth::user()->employee?->position)->nama ?? "HR / Admin" }}' };
+        }
+        return null;
+    }
+
+    // Replace placeholder employee pada satu salinan multi-surat.
+    // Pemetaan placeholder → slot tanda tangan:
+    //   employee_ / employee1_  → slot 1
+    //   employee2_              → slot 2
+    //   employee3_              → slot 3
     function applyRecipientPlaceholders(content, empData) {
-        // placeholder employee_name & varian → fullname (name bukan field model, diambil dari fullname)
-        var nameVal = empData ? (empData.name || empData.fullname || '_______________') : '_______________';
-        content = content.replace(/\{\{(?:employee|employee1|employee2|employee3)_name\}\}/g, nameVal);
-        // Penerima multi-surat adalah subjek surat → semua varian prefix menunjuk ke data penerima
-        empFields.forEach(function(f) {
-            var v = empData ? (empData[f] || '_______________') : '_______________';
-            content = content.replace(new RegExp('\\{\\{(?:employee|employee1|employee2|employee3)_' + escRegex(f) + '\\}\\}', 'g'), v);
+        [['employee_', 1, /^\{\{(?:employee|employee1)_/], ['employee1_', 1, /^\{\{(?:employee|employee1)_/], ['employee2_', 2, /^\{\{employee2_/], ['employee3_', 3, /^\{\{employee3_/]].forEach(function(def) {
+            var prefix = def[0], slot = def[1];
+            var data = getSlotData(slot, empData);
+            var name = data ? (data.fullname || data.name || '_______________') : '_______________';
+            var nameKey = prefix === 'employee_' ? 'employee_name' : prefix + 'name';
+            content = content.replace(new RegExp('\\{\\{' + nameKey + '\\}\\}', 'g'), name);
+            empFields.forEach(function(f) {
+                var v = data ? (data[f] || '_______________') : '_______________';
+                content = content.replace(new RegExp('\\{\\{' + prefix + escRegex(f) + '\\}\\}', 'g'), v);
+            });
         });
         return content;
     }
 
-    // Area tanda tangan per salinan multi-surat: Sign 1 (penanggung jawab) & Sign 2 (penerima)
-    function multiSignAreaHtml(empData) {
-        var hrName = '{{ optional(Auth::user()->employee)->fullname ?? "HR / Admin" }}';
-        var hrPos = '{{ optional(Auth::user()->employee?->position)->nama ?? "HR / Admin" }}';
-        var recName = empData ? (empData.fullname || '_______________') : '_______________';
-        var recPos = empData ? (empData.position || '_______________') : '_______________';
-
-        // Sign 1: pihak pertama / dari perusahaan (field Pihak Pertama), fallback HR
-        var pp = $('#selectPihakPertama').find(':selected');
-        var ppName = (pp.length && pp.val()) ? (pp.data('nama') || hrName) : hrName;
-        var ppPos = (pp.length && pp.val()) ? (pp.data('jabatan') || hrPos) : hrPos;
-        var sign1Name = ppName;
-        var sign1Pos = ppPos;
-
-        // Sign 2: pihak kedua / penerima → penerima salinan ini (backend simpan sebagai employee2_signee_id)
-        var sign2Name = recName;
-        var sign2Pos = recPos;
-
-        return '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-top:18px;page-break-inside:avoid;">' +
-            signBoxHtml('Sign 1', sign1Name, sign1Pos) +
-            signBoxHtml('Sign 2', sign2Name, sign2Pos) +
+    // Area tanda tangan per salinan multi-surat — hanya slot aktif, terposisi (kiri=Sign2, tengah=Sign3, kanan=Sign1).
+    function multiSignAreaHtml(empData, recSlot) {
+        var active = window.activeSigns || [];
+        function cell(slot) {
+            if (active.indexOf(slot) === -1) return '';
+            var data = getSlotData(slot, empData);
+            var name = data ? (data.fullname || data.name || '') : '';
+            var pos = data ? (data.position || '') : '';
+            return signBoxHtml('Sign ' + slot, name, pos);
+        }
+        return '<div class="esign-signature-area" style="display:flex;align-items:flex-start;justify-content:space-between;margin-top:18px;page-break-inside:avoid;">' +
+            cell(2) + cell(3) + cell(1) +
             '</div>';
     }
 

@@ -2,6 +2,7 @@
 @section('title', 'Tambah Template - E-Sign')
 @section('link')
 <meta name="csrf-token" content="{{ csrf_token() }}">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <style>
     .form-card {
         border: none;
@@ -350,12 +351,15 @@
     </div>
 </div>
 
-<form action="{{ route('e-sign.templates.store') }}" method="POST">
+<form action="{{ route('e-sign.templates.store') }}" method="POST" id="formTemplate">
     @csrf
     <input type="hidden" name="template_type" value="editor">
     <input type="hidden" name="sign_1" id="inputSign1" value="1">
     <input type="hidden" name="sign_2" id="inputSign2" value="0">
     <input type="hidden" name="sign_3" id="inputSign3" value="0">
+    <input type="hidden" name="sign_1_is_recipient" id="inputRecipient1" value="0">
+    <input type="hidden" name="sign_2_is_recipient" id="inputRecipient2" value="0">
+    <input type="hidden" name="sign_3_is_recipient" id="inputRecipient3" value="0">
     <!-- Baris 1: Informasi Template -->
     <div class="row mb-4">
         <div class="col-lg-8">
@@ -489,13 +493,21 @@
                         </div>
                     </div>
 
-                    {{-- Surat: Tanggal 1, Tanggal 2, ... --}}
+                    {{-- Surat: Nomor Surat + Tanggal --}}
+                    @php $openT = '{' . '{'; $closeT = '}' . '}'; @endphp
                     <div class="mb-3">
                         <div class="placeholder-group-title"><i class="ri-file-text-line me-1"></i> Surat</div>
                         <div class="d-flex align-items-start gap-1 mb-1" style="flex-wrap:wrap;">
+                            <span style="font-size:11px;font-weight:500;color:#6c757d;line-height:24px;white-space:nowrap;">Nomor:</span>
+                            <div class="d-flex gap-1 flex-wrap">
+                                <button type="button" class="btn btn-outline-primary" style="font-size:11px;padding:1px 10px;" onclick="insertPlaceholder('{{$openT}}nomor_surat{{$closeT}}')">
+                                    <i class="ri-hashtag"></i> Nomor Surat
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-start gap-1 mb-1" style="flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:500;color:#6c757d;line-height:24px;white-space:nowrap;">Tanggal:</span>
                             <div class="d-flex gap-1 flex-wrap" id="tanggalGroup">
-                                @php $openT = '{' . '{'; $closeT = '}' . '}'; @endphp
                                 <button type="button" class="btn btn-outline-primary" style="font-size:11px;padding:1px 10px;" onclick="insertPlaceholder('{{$openT}}tanggal_1{{$closeT}}')">
                                     <i class="ri-calendar-line"></i> Tanggal 1
                                 </button>
@@ -530,6 +542,23 @@
                         </div>
                         <div class="text-muted mt-2" style="font-size:11px;">
                             Klik untuk mengaktifkan/nonaktifkan slot tanda tangan.
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 mt-2 recipient-toggle-group">
+                            <div class="form-check form-check-inline mb-0">
+                                <input type="checkbox" class="form-check-input recipient-check" data-sign="1" id="recipientSign1">
+                                <label class="form-check-label" for="recipientSign1" style="font-size:11px;">Sign 1 = Penerima</label>
+                            </div>
+                            <div class="form-check form-check-inline mb-0">
+                                <input type="checkbox" class="form-check-input recipient-check" data-sign="2" id="recipientSign2">
+                                <label class="form-check-label" for="recipientSign2" style="font-size:11px;">Sign 2 = Penerima</label>
+                            </div>
+                            <div class="form-check form-check-inline mb-0">
+                                <input type="checkbox" class="form-check-input recipient-check" data-sign="3" id="recipientSign3">
+                                <label class="form-check-label" for="recipientSign3" style="font-size:11px;">Sign 3 = Penerima</label>
+                            </div>
+                        </div>
+                        <div class="text-muted mt-1" style="font-size:11px;">
+                            Slot bertanda "Penerima" diisi per penerima pada multi-surat; slot lain tetap. Maksimal satu slot penerima.
                         </div>
                     </div>
 
@@ -703,11 +732,48 @@
             var n = btn.dataset.sign;
             var input = document.getElementById('inputSign' + n);
             input.value = input.value === '1' ? '0' : '1';
+            // Nonaktif: hapus penanda penerima pada slot tersebut
+            if (input.value === '0') {
+                var rec = document.getElementById('inputRecipient' + n);
+                if (rec) rec.value = '0';
+                var chk = document.getElementById('recipientSign' + n);
+                if (chk) chk.checked = false;
+            }
             updateSignButtons();
+            updateRecipientButtons();
             if (window.refreshEditorSignPlaceholder) window.refreshEditorSignPlaceholder();
         });
     });
     updateSignButtons();
+
+    // ---- Penanda slot Penerima (maksimal 1) ----
+    function updateRecipientButtons() {
+        document.querySelectorAll('.recipient-check').forEach(function(chk) {
+            var n = chk.dataset.sign;
+            var input = document.getElementById('inputSign' + n);
+            var disabled = !input || input.value !== '1';
+            chk.disabled = disabled;
+            if (disabled && chk.checked) {
+                chk.checked = false;
+                var rec = document.getElementById('inputRecipient' + n);
+                if (rec) rec.value = '0';
+            }
+        });
+    }
+    document.querySelectorAll('.recipient-check').forEach(function(chk) {
+        chk.addEventListener('change', function() {
+            var n = chk.dataset.sign;
+            // Hanya satu slot penerima: uncheck lainnya
+            document.querySelectorAll('.recipient-check').forEach(function(other) {
+                if (other !== chk) other.checked = false;
+            });
+            document.querySelectorAll('.recipient-check').forEach(function(other) {
+                var on = other.dataset.sign;
+                document.getElementById('inputRecipient' + on).value = other.checked ? '1' : '0';
+            });
+        });
+    });
+    updateRecipientButtons();
 
     // Bangun HTML slot tanda tangan pada preview sesuai sign aktif
     function buildPreviewSignatureHtml() {
@@ -743,14 +809,12 @@
         }
         if (!content.trim()) { alert('Template masih kosong.'); return; }
 
-        // Kop surat (letterhead) + judul + nomor — sama dengan preview editor surat.
-        // Kop berulang di tiap halaman; judul & nomor hanya di halaman pertama.
+        // Kop surat (letterhead). Judul & nomor TIDAK di-generate di sini:
+        // nomor surat (@{{nomor_surat}}) ditempatkan bebas oleh user di template,
+        // sedangkan judul diisi sendiri oleh user saat membuat surat.
         var logoUrl = '{{ url('') }}/assets/images/KOP-terbaru.png';
-        var judulTxt = 'Judul Surat';
         var fullHtml =
             '<div class="company-header"><img src="' + logoUrl + '" alt="Kop Surat" class="kop-img-full"></div>' +
-            '<div class="doc-title">' + judulTxt + '</div>' +
-            '<div class="doc-number">Nomor: _______________</div>' +
             content +
             buildPreviewSignatureHtml();
 
@@ -869,5 +933,31 @@
     }
 
     $('#previewModal').on('shown.bs.modal', paginateTemplatePreview);
+
+    // Cegah simpan bila template tidak menyertakan placeholder nomor surat
+    document.getElementById('formTemplate').addEventListener('submit', function(e) {
+        var content = window.getRoosterContent
+            ? window.getRoosterContent()
+            : document.getElementById('templateContent').value;
+        if (content.indexOf('@{{nomor_surat}}') === -1) {
+            e.preventDefault();
+            var msg = 'Template wajib menyertakan placeholder @{{nomor_surat}} pada isi surat. ' +
+                      'Gunakan tombol "Nomor Surat" pada panel placeholder untuk menambahkannya.';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Nomor Surat belum ada',
+                    html: 'Template wajib menyertakan placeholder ' +
+                          '<code style="font-size:.95em;background:#f5f6f8;border:1px solid #e2e5ea;border-radius:4px;padding:1px 6px;color:#405189;">@{{nomor_surat}}</code> ' +
+                          'pada isi surat.<br><small class="text-muted">Gunakan tombol "Nomor Surat" pada panel placeholder untuk menambahkannya.</small>',
+                    confirmButtonText: 'Oke, mengerti',
+                    confirmButtonColor: '#f0b429',
+                    allowOutsideClick: false
+                });
+            } else {
+                alert(msg);
+            }
+        }
+    });
 </script>
 @endsection

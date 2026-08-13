@@ -20,7 +20,7 @@ INTRANET.ES.26.003
 INTRANET.ES.26.004	"Sub Menu dari E-Sign Management :
 1) Jenis Surat
     - Create Jenis Surat (Nama Jenis, Kode Surat. Lalu create Template dari Jenis Surat.
-    - Pembuatan template mengacu pada jenis surat yang sudah terbentuk
+    - Pembuatan template mengacu pada jenis surat yang sudah terbentuk  
 2) Daftar Surat
     - Create Surat dengan memilik Jenis Surat, dan template suratnya
     - Mencari employee siapa yang terlibat untuk sign sesuai dengan template yang dibuat sebelumnya. Fungsi tombil : Save Draft, Submit (surat langsung terkirim ke Sign 1 dst), Print PDF (hasil surat bisa dilihat diawal meskipun belum di sign)

@@ -259,6 +259,12 @@
         margin: 0 auto;
     }
     /* Kop + judul + nomor pada preview — disamakan dengan preview editor template */
+    .kop-img-full {
+        width: 85%;
+        height: auto;
+        display: block;
+        margin: 0 auto;
+    }
     .company-header {
         text-align: center;
         margin-bottom: 6px;
@@ -449,14 +455,13 @@
                 data: { ajax: 1 },
                 success: function(res) {
                     let content = res.rendered || '<p class="text-muted">Tidak ada konten template.</p>';
-                    // Kop + judul + nomor + tanda tangan — disamakan dengan preview editor template.
-                    // Kop berulang di tiap halaman; judul & nomor hanya di halaman pertama.
+                    // Kop surat (letterhead). Judul & nomor TIDAK di-generate di sini:
+                    // nomor surat (@{{nomor_surat}}) ditempatkan bebas oleh user di template,
+                    // sedangkan judul diisi sendiri oleh user saat membuat surat.
                     let fullHtml = `
                         <div class="company-header">
                             <img src="{{ url('') }}/assets/images/KOP-terbaru.png" alt="Kop Surat" class="kop-img-full">
                         </div>
-                        <div class="doc-title">Judul Surat</div>
-                        <div class="doc-number">Nomor: _______________</div>
                     ` + content + buildPreviewSignatureHtml(res);
                     fullHtml = fullHtml.replace(/\{\{(\w+)\}\}/g, '<span class="preview-placeholder">@{{$1}}</span>');
                     renderPreviewPages(fullHtml);

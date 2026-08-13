@@ -646,14 +646,13 @@
         function showPreview(tpl) {
             let content = tpl.content || '<p class="text-muted">Tidak ada konten template.</p>';
 
-            // Kop + judul + nomor + tanda tangan — disamakan dengan preview editor template.
-            // Kop berulang di tiap halaman; judul & nomor hanya di halaman pertama.
+            // Kop surat (letterhead). Judul & nomor TIDAK di-generate di sini:
+            // nomor surat (@{{nomor_surat}}) ditempatkan bebas oleh user di template,
+            // sedangkan judul diisi sendiri oleh user saat membuat surat.
             let fullHtml = `
                 <div class="company-header">
                     <img src="{{ url('') }}/assets/images/KOP-terbaru.png" alt="Kop Surat" class="kop-img-full">
                 </div>
-                <div class="doc-title">Judul Surat</div>
-                <div class="doc-number">Nomor: _______________</div>
             ` + content + buildPreviewSignatureHtml(tpl);
 
             // Highlight placeholders — escape Blade with @

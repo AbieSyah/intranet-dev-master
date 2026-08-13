@@ -17,10 +17,12 @@ class LetterType extends Model
         'icon',
         'color',
         'is_active',
+        'multi_enabled',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
+        'is_active'     => 'boolean',
+        'multi_enabled' => 'boolean',
     ];
 
     // ========== RELATIONSHIPS ==========

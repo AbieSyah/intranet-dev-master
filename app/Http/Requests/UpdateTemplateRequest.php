@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateTemplateRequest extends FormRequest
 {
@@ -29,6 +30,9 @@ class UpdateTemplateRequest extends FormRequest
             'sign_1' => ['boolean'],
             'sign_2' => ['boolean'],
             'sign_3' => ['boolean'],
+            'sign_1_is_recipient' => ['boolean'],
+            'sign_2_is_recipient' => ['boolean'],
+            'sign_3_is_recipient' => ['boolean'],
         ];
     }
 
@@ -48,6 +52,30 @@ class UpdateTemplateRequest extends FormRequest
             'page_margin_right.min' => 'Margin minimal 5mm.',
             'page_margin_right.max' => 'Margin maksimal 100mm.',
             'page_size.in' => 'Ukuran kertas harus A4, Letter, atau Legal.',
+        ];
+    }
+
+    /**
+     * Validasi tambahan: template editor wajib menyertakan placeholder {{nomor_surat}}.
+     * Nomor surat harus ditempatkan oleh user di dalam template agar bisa digenerate.
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                $type = $this->input('template_type');
+                $content = $this->input('content');
+
+                // Hanya untuk template berbasis teks (editor/html).
+                if (in_array($type, ['editor', 'html']) && is_string($content)) {
+                    if (strpos($content, '{{nomor_surat}}') === false) {
+                        $validator->errors()->add(
+                            'content',
+                            'Template wajib menyertakan placeholder {{nomor_surat}} pada isi surat.'
+                        );
+                    }
+                }
+            },
         ];
     }
 }

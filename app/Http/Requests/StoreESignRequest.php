@@ -21,7 +21,12 @@ class StoreESignRequest extends FormRequest
      */
     public function rules(): array
     {
-        $jenisSuratSlugs = array_keys(ESign::getJenisSuratLabels());
+        // Gabungkan slug hardcoded (legacy) dengan slug dinamis dari tabel letter_types,
+        // agar jenis surat baru (mis. "pengumuman") juga lolos validasi.
+        $jenisSuratSlugs = array_values(array_unique(array_merge(
+            array_keys(ESign::getJenisSuratLabels()),
+            \App\Models\LetterType::pluck('slug')->all()
+        )));
 
         $multi = $this->input('multi_surat') === '1';
 

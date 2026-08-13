@@ -158,14 +158,22 @@ class DocumentNumberService
     /**
      * Get the prefix for a given letter type slug.
      *
+     * Prioritas:
+     * 1. Field `prefix` pada tabel `letter_types` (data master jenis surat).
+     * 2. Konfigurasi `esign.prefixes` (fallback untuk slug yang belum ada di master).
+     * 3. `esign.fallback_prefix` (default 'DOC').
+     *
      * @param string $jenisSuratSlug
      * @return string
      */
     public function getPrefix(string $jenisSuratSlug): string
     {
-        $prefixes = config('esign.prefixes', []);
-        $fallback = config('esign.fallback_prefix', 'DOC');
+        $letterType = \App\Models\LetterType::where('slug', $jenisSuratSlug)->first();
+        if ($letterType && !empty($letterType->prefix)) {
+            return strtoupper($letterType->prefix);
+        }
 
-        return $prefixes[$jenisSuratSlug] ?? $fallback;
+        $prefixes = config('esign.prefixes', []);
+        return $prefixes[$jenisSuratSlug] ?? config('esign.fallback_prefix', 'DOC');
     }
 }

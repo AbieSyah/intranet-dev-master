@@ -76,6 +76,11 @@
 
                 $fileData = $this->handleFileUpload($data);
 
+                $sign1 = $data['sign_1'] ?? true;
+                $sign2 = $data['sign_2'] ?? false;
+                $sign3 = $data['sign_3'] ?? false;
+                $recipientFlags = $this->normalizeRecipientFlags($sign1, $sign2, $sign3, $data);
+
                 $template = ESignTemplate::create([
                     'letter_type_id' => $data['letter_type_id'],
                     'jenis_surat_slug' => $letterType->slug,
@@ -88,9 +93,12 @@
                     'is_active' => $data['is_active'] ?? false,
                     'created_by' => Auth::id(),
                     'updated_by' => Auth::id(),
-                    'sign_1' => $data['sign_1'] ?? true,
-                    'sign_2' => $data['sign_2'] ?? false,
-                    'sign_3' => $data['sign_3'] ?? false,
+                    'sign_1' => $sign1,
+                    'sign_2' => $sign2,
+                    'sign_3' => $sign3,
+                    'sign_1_is_recipient' => $recipientFlags[1],
+                    'sign_2_is_recipient' => $recipientFlags[2],
+                    'sign_3_is_recipient' => $recipientFlags[3],
                 ]);
 
                 return $template->fresh('creator', 'updater', 'letterType');
@@ -137,6 +145,16 @@
                     'sign_3' => $data['sign_3'] ?? $template->sign_3 ?? false,
                 ];
 
+                $recipientFlags = $this->normalizeRecipientFlags(
+                    $updateData['sign_1'],
+                    $updateData['sign_2'],
+                    $updateData['sign_3'],
+                    $data
+                );
+                $updateData['sign_1_is_recipient'] = $recipientFlags[1];
+                $updateData['sign_2_is_recipient'] = $recipientFlags[2];
+                $updateData['sign_3_is_recipient'] = $recipientFlags[3];
+
                 // Handle file upload
                 $fileData = $this->handleFileUpload($data, $template);
                 if ($fileData['content_changed']) {
@@ -155,6 +173,42 @@
 
                 return $template->fresh('creator', 'updater', 'letterType');
             });
+        }
+
+        /**
+         * Hitung flag slot penerima (sign_X_is_recipient) dari input form.
+         *
+         * Hanya slot yang aktif yang boleh ditandai sebagai penerima, dan maksimal
+         * satu slot penerima per template. Bila lebih dari satu ditandai, slot
+         * pertama (urut 1..3) yang dipertahankan.
+         *
+         * @return array{1: bool, 2: bool, 3: bool}
+         */
+        private function normalizeRecipientFlags(bool $sign1, bool $sign2, bool $sign3, array $data): array
+        {
+            $active = [1 => $sign1, 2 => $sign2, 3 => $sign3];
+            $flags = [
+                1 => (bool) ($data['sign_1_is_recipient'] ?? false),
+                2 => (bool) ($data['sign_2_is_recipient'] ?? false),
+                3 => (bool) ($data['sign_3_is_recipient'] ?? false),
+            ];
+
+            foreach ([1, 2, 3] as $slot) {
+                if (!$active[$slot]) {
+                    $flags[$slot] = false;
+                }
+            }
+
+            $picked = false;
+            foreach ([1, 2, 3] as $slot) {
+                if ($flags[$slot] && !$picked) {
+                    $picked = true;
+                } elseif ($flags[$slot]) {
+                    $flags[$slot] = false;
+                }
+            }
+
+            return $flags;
         }
 
         /**

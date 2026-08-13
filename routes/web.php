@@ -505,6 +505,8 @@ Route::group(['middleware' => 'auth'], function () {
 
             // Send to Employee
             Route::post('/{esign}/send', 'send')->name('e-sign.send');
+            // Send multiple draft letters at once
+            Route::post('/send-bulk', 'sendBulk')->name('e-sign.send-bulk');
 
             // Multi-surat batch
             Route::get('/batch/{batch}/edit', 'editBatch')->name('e-sign.batch.edit');
