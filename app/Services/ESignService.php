@@ -405,9 +405,10 @@ class ESignService
                 ]);
                 $doc = $doc->fresh();
 
-                // Notifikasi serentak: HR (sign 1) dan karyawan penerima (sign 2)
-                $this->sendSignNotification($doc, 1);
-                $this->sendSignNotification($doc, 2);
+                // Kirim notifikasi ke semua penandatangan aktif.
+                foreach ($this->activeSlots($doc) as $slot) {
+                    $this->sendSignNotification($doc, $slot);
+                }
             }
 
             return $batch->fresh('documents');
@@ -429,96 +430,17 @@ class ESignService
         // ============================================================
         // MULTI-SURAT (batch): tanda tangan paralel.
         // HR (sign 1) & karyawan (sign 2) bisa tanda tangan kapan saja,
-        // tidak saling menunggu. Selesai saat keduanya sudah menandatangani.
+        // tidak saling menunggu. Selesai saat semua slot aktif menandatangani.
         // ============================================================
         if ($eSign->batch_id) {
-            if ($eSign->employee1_signee_id == $employeeId && $eSign->employee1_signed_at) {
-                abort(403, 'Anda sudah menandatangani surat ini.');
-            }
-            if ($eSign->employee2_signee_id == $employeeId && $eSign->employee2_signed_at) {
-                abort(403, 'Anda sudah menandatangani surat ini.');
-            }
-            if ($eSign->employee1_signee_id != $employeeId && $eSign->employee2_signee_id != $employeeId) {
-                abort(403, 'Anda tidak terdaftar sebagai penandatangan surat ini.');
-            }
-
-            return DB::transaction(function () use ($eSign, $employeeId) {
-                $now = now();
-                $updateData = [];
-
-                if ($eSign->employee1_signee_id == $employeeId) {
-                    $updateData['employee1_signed_at'] = $now;
-                } else {
-                    $updateData['employee2_signed_at'] = $now;
-                }
-
-                $current = $eSign->fresh();
-                $s1 = $updateData['employee1_signed_at'] ?? $current->employee1_signed_at;
-                $s2 = $updateData['employee2_signed_at'] ?? $current->employee2_signed_at;
-
-                // Label status akurat: selesai hanya bila keduanya menandatangani,
-                // jika belum lengkap tampilkan pihak yang masih menunggu.
-                $updateData['status'] = ($s1 && $s2)
-                    ? ESign::STATUS_COMPLETED
-                    : ($s1 ? ESign::STATUS_SIGN_2 : ESign::STATUS_SIGN_1);
-
-                $eSign->update($updateData);
-                $eSign = $eSign->fresh();
-
-                // Ingatkan pihak yang masih belum menandatangani.
-                if ($updateData['status'] !== ESign::STATUS_COMPLETED) {
-                    $this->sendSignNotification($eSign, $s1 ? 2 : 1);
-                }
-
-                return $eSign;
-            });
+            return $this->signParallel($eSign, $employeeId);
         }
 
         // ============================================================
         // Surat tunggal TANDA TANGAN PARALEL (kirim via "Langsung Kirim").
-        // Sign 1 & Sign 2 bisa tanda tangan kapan saja; selesai saat keduanya sdh tandatangan.
         // ============================================================
         if ($eSign->is_parallel_sign) {
-            if ($eSign->employee1_signee_id == $employeeId && $eSign->employee1_signed_at) {
-                abort(403, 'Anda sudah menandatangani surat ini.');
-            }
-            if ($eSign->employee2_signee_id == $employeeId && $eSign->employee2_signed_at) {
-                abort(403, 'Anda sudah menandatangani surat ini.');
-            }
-            if ($eSign->employee1_signee_id != $employeeId && $eSign->employee2_signee_id != $employeeId) {
-                abort(403, 'Anda tidak terdaftar sebagai penandatangan surat ini.');
-            }
-
-            return DB::transaction(function () use ($eSign, $employeeId) {
-                $now = now();
-                $updateData = [];
-
-                if ($eSign->employee1_signee_id == $employeeId) {
-                    $updateData['employee1_signed_at'] = $now;
-                } else {
-                    $updateData['employee2_signed_at'] = $now;
-                }
-
-                $current = $eSign->fresh();
-                $s1 = $updateData['employee1_signed_at'] ?? $current->employee1_signed_at;
-                $s2 = $updateData['employee2_signed_at'] ?? $current->employee2_signed_at;
-
-                // Label status akurat: selesai hanya bila keduanya menandatangani,
-                // jika belum lengkap tampilkan pihak yang masih menunggu.
-                $updateData['status'] = ($s1 && $s2)
-                    ? ESign::STATUS_COMPLETED
-                    : ($s1 ? ESign::STATUS_SIGN_2 : ESign::STATUS_SIGN_1);
-
-                $eSign->update($updateData);
-                $eSign = $eSign->fresh();
-
-                // Ingatkan pihak yang masih belum menandatangani.
-                if ($updateData['status'] !== ESign::STATUS_COMPLETED) {
-                    $this->sendSignNotification($eSign, $s1 ? 2 : 1);
-                }
-
-                return $eSign;
-            });
+            return $this->signParallel($eSign, $employeeId);
         }
 
         // Surat tunggal: hanya giliran yang bisa menandatangani
@@ -535,18 +457,18 @@ class ESignService
 
             if ($currentLevel === 1) {
                 $updateData['employee1_signed_at'] = $now;
-                // Jika ada signee2, lanjut ke sign_2. Jika tidak, langsung completed.
+                // Jika ada signee2, lanjut ke sign_2. Jika tidak, selesai (atau menunggu konfirmasi).
                 $updateData['status'] = $eSign->employee2_signee_id
                     ? ESign::STATUS_SIGN_2
-                    : ESign::STATUS_COMPLETED;
+                    : $this->completionStatus($eSign);
             } elseif ($currentLevel === 2) {
                 $updateData['employee2_signed_at'] = $now;
                 $updateData['status'] = $eSign->employee3_signee_id
                     ? ESign::STATUS_SIGN_3
-                    : ESign::STATUS_COMPLETED;
+                    : $this->completionStatus($eSign);
             } elseif ($currentLevel === 3) {
                 $updateData['employee3_signed_at'] = $now;
-                $updateData['status'] = ESign::STATUS_COMPLETED;
+                $updateData['status'] = $this->completionStatus($eSign);
             }
 
             $eSign->update($updateData);
@@ -558,8 +480,144 @@ class ESignService
                 $this->sendSignNotification($eSign, $nextLevel);
             }
 
+            // Semua penandatangan selesai & ada penerima-non-penandatangan →
+            // kirim email konfirmasi baca ke penerima.
+            if ($eSign->isAwaitingAck()) {
+                $this->sendRecipientNotification($eSign);
+            }
+
             return $eSign;
         });
+    }
+
+    /**
+     * Tanda tangan paralel (batch multi-surat & surat tunggal "Langsung Kirim").
+     * Penandatangan aktif bisa menandatangani kapan saja; setelah SEMUA slot aktif
+     * selesai, transisi ke completed / menunggu konfirmasi penerima.
+     */
+    private function signParallel(ESign $eSign, int $employeeId): ESign
+    {
+        $slots = $this->activeSlots($eSign);
+
+        // Validasi: employee harus terdaftar sebagai salah satu penandatangan aktif.
+        $isSignee = false;
+        foreach ($slots as $slot) {
+            if ($eSign->{"employee{$slot}_signee_id"} == $employeeId) {
+                $isSignee = true;
+                if ($eSign->{"employee{$slot}_signed_at"}) {
+                    abort(403, 'Anda sudah menandatangani surat ini.');
+                }
+            }
+        }
+        if (!$isSignee) {
+            abort(403, 'Anda tidak terdaftar sebagai penandatangan surat ini.');
+        }
+
+        return DB::transaction(function () use ($eSign, $employeeId) {
+            $now = now();
+            $updateData = [];
+
+            foreach ($this->activeSlots($eSign) as $slot) {
+                if ($eSign->{"employee{$slot}_signee_id"} == $employeeId) {
+                    $updateData["employee{$slot}_signed_at"] = $now;
+                }
+            }
+
+            $eSign->update($updateData);
+            $eSign = $eSign->fresh();
+
+            $updateData['status'] = $this->determinePostSignStatus($eSign);
+            $eSign->update(['status' => $updateData['status']]);
+            $eSign = $eSign->fresh();
+
+            // Ingatkan penandatangan aktif yang belum menandatangani.
+            if (!$this->allSignSlotsCompleted($eSign)) {
+                foreach ($this->activeSlots($eSign) as $slot) {
+                    if (empty($eSign->{"employee{$slot}_signed_at"})) {
+                        $this->sendSignNotification($eSign, $slot);
+                        break;
+                    }
+                }
+            }
+
+            // Semua penandatangan selesai & ada penerima-non-penandatangan →
+            // kirim email konfirmasi baca ke penerima.
+            if ($eSign->isAwaitingAck()) {
+                $this->sendRecipientNotification($eSign);
+            }
+
+            return $eSign;
+        });
+    }
+
+    /**
+     * Slot penandatangan aktif dari template, fallback ke slot yang punya signee.
+     *
+     * @return int[]
+     */
+    private function activeSlots(ESign $eSign): array
+    {
+        if ($eSign->template) {
+            $slots = $eSign->template->sign_slots;
+            if (!empty($slots)) {
+                return $slots;
+            }
+        }
+        $slots = [];
+        foreach ([1, 2, 3] as $slot) {
+            if ($eSign->{"employee{$slot}_signee_id"}) {
+                $slots[] = $slot;
+            }
+        }
+        return $slots ?: [1];
+    }
+
+    /**
+     * Apakah semua slot penandatangan aktif sudah menandatangani.
+     */
+    private function allSignSlotsCompleted(ESign $eSign): bool
+    {
+        foreach ($this->activeSlots($eSign) as $slot) {
+            if (empty($eSign->{"employee{$slot}_signed_at"})) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Status setelah tanda tangan: bila semua slot aktif selesai, lanjut ke
+     * menunggu konfirmasi penerima (jika penerima bukan penandatangan) atau completed.
+     */
+    private function determinePostSignStatus(ESign $eSign): string
+    {
+        if (!$this->allSignSlotsCompleted($eSign)) {
+            return $this->nextPendingStatus($eSign);
+        }
+        return $this->completionStatus($eSign);
+    }
+
+    /**
+     * Status untuk slot aktif berikutnya yang belum menandatangani.
+     */
+    private function nextPendingStatus(ESign $eSign): string
+    {
+        foreach ($this->activeSlots($eSign) as $slot) {
+            if (empty($eSign->{"employee{$slot}_signed_at"})) {
+                return "sign_{$slot}";
+            }
+        }
+        return ESign::STATUS_COMPLETED;
+    }
+
+    /**
+     * Status akhir setelah seluruh penandatangan selesai.
+     */
+    private function completionStatus(ESign $eSign): string
+    {
+        return $eSign->hasRecipientOnly()
+            ? ESign::STATUS_AWAITING_ACK
+            : ESign::STATUS_COMPLETED;
     }
 
     /**
@@ -581,6 +639,41 @@ class ESignService
 
         Notification::route('mail', $signee->email)
             ->notify(new ESignNotification($eSign, $signee, $signLevel));
+    }
+
+    /**
+     * Kirim email ke penerima (yang TIDAK menandatangani) agar mengonfirmasi
+     * bahwa surat sudah dibaca, setelah seluruh penandatangan selesai.
+     */
+    private function sendRecipientNotification(ESign $eSign): void
+    {
+        if (!$eSign->employee_id) return;
+
+        $recipient = Employee::find($eSign->employee_id);
+        if (!$recipient || !$recipient->email) return;
+
+        Notification::route('mail', $recipient->email)
+            ->notify(new \App\Notifications\ESignRecipientNotification($eSign, $recipient));
+    }
+
+    /**
+     * Penerima (yang tidak menandatangani) mengonfirmasi telah membaca surat.
+     * Valid & hanya berlaku untuk status awaiting_ack oleh employee_id yang sama.
+     */
+    public function acknowledgeByRecipient(ESign $eSign, int $employeeId): ESign
+    {
+        if (!$eSign->canAcknowledge($employeeId)) {
+            abort(403, 'Anda tidak berhak mengonfirmasi surat ini.');
+        }
+
+        return DB::transaction(function () use ($eSign) {
+            $eSign->update([
+                'recipient_acknowledged_at' => now(),
+                'status'                    => ESign::STATUS_ACKNOWLEDGED,
+            ]);
+
+            return $eSign->fresh();
+        });
     }
 
     /**

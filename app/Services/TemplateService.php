@@ -18,7 +18,8 @@
          */
         public function index($letterTypeId = null, $search = null)
         {
-            $query = ESignTemplate::with('creator', 'updater', 'letterType');
+            $query = ESignTemplate::with('creator', 'updater', 'letterType')
+                ->withCount(['documents', 'batches']);
 
             if ($letterTypeId) {
                 $query->where('letter_type_id', $letterTypeId);
@@ -67,16 +68,9 @@
                     ->max('version') ?? 0;
                 $nextVersion = $lastVersion + 1;
 
-                // If setting as active, deactivate all others of this type
-                if (!empty($data['is_active'])) {
-                    ESignTemplate::where('letter_type_id', $data['letter_type_id'])
-                        ->where('is_active', true)
-                        ->update(['is_active' => false]);
-                }
-
                 $fileData = $this->handleFileUpload($data);
 
-                $sign1 = $data['sign_1'] ?? true;
+                $sign1 = $data['sign_1'] ?? false;
                 $sign2 = $data['sign_2'] ?? false;
                 $sign3 = $data['sign_3'] ?? false;
                 $recipientFlags = $this->normalizeRecipientFlags($sign1, $sign2, $sign3, $data);
@@ -112,14 +106,6 @@
         {
             return DB::transaction(function () use ($id, $data) {
                 $template = ESignTemplate::findOrFail($id);
-
-                // If setting as active, deactivate all others of this type
-                if (!empty($data['is_active'])) {
-                    ESignTemplate::where('letter_type_id', $template->letter_type_id)
-                        ->where('id', '!=', $id)
-                        ->where('is_active', true)
-                        ->update(['is_active' => false]);
-                }
 
                 // Layout settings — merge with defaults
                 $layoutDefaults = [
@@ -219,17 +205,27 @@
             return DB::transaction(function () use ($id) {
                 $template = ESignTemplate::findOrFail($id);
 
-                // Deactivate all others
-                ESignTemplate::where('letter_type_id', $template->letter_type_id)
-                    ->where('is_active', true)
-                    ->update(['is_active' => false]);
-
-                // Activate this one
+                // Activate this one (multiple active templates diperbolehkan)
                 $template->update([
                     'is_active' => true,
                     'updated_by' => Auth::id(),
                 ]);
 
+                return $template->fresh('creator', 'updater', 'letterType');
+            });
+        }
+
+        /**
+         * Nonaktifkan template (is_active = false).
+         */
+        public function deactivate(int $id): ESignTemplate
+        {
+            return DB::transaction(function () use ($id) {
+                $template = ESignTemplate::findOrFail($id);
+                $template->update([
+                    'is_active' => false,
+                    'updated_by' => Auth::id(),
+                ]);
                 return $template->fresh('creator', 'updater', 'letterType');
             });
         }
@@ -241,14 +237,12 @@
         {
             $template = ESignTemplate::findOrFail($id);
 
-            // Check if any e_signs reference this jenis surat with active status
-            $usedCount = ESign::where('jenis_surat_slug', $template->jenis_surat_slug)
-                ->whereIn('status', ['draft', 'pending', 'waiting_employee'])
-                ->count();
+            // Template yang sudah pernah menerbitkan surat tidak boleh dihapus
+            $usedCount = $template->documents()->count() + $template->batches()->count();
 
             if ($usedCount > 0) {
                 throw new \RuntimeException(
-                    "Template sedang digunakan oleh {$usedCount} surat aktif dan tidak dapat dihapus."
+                    "Template sudah pernah menerbitkan surat dan tidak dapat dihapus. Silakan nonaktifkan."
                 );
             }
 

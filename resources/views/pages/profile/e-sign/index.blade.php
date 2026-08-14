@@ -55,6 +55,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {{ $tab === 'confirm' ? 'active' : '' }}"
+                            href="{{ route('e-sign.profile-index', ['tab' => 'confirm']) }}">
+                            <i class="ri-mail-check-line me-1"></i> Konfirmasi
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {{ $tab === 'done' ? 'active' : '' }}"
                             href="{{ route('e-sign.profile-index', ['tab' => 'done']) }}">
                             <i class="ri-check-double-line me-1"></i> Done
@@ -82,6 +88,8 @@
                                 $badge = 'secondary';
                                 if (in_array($doc->status, ['sign_1', 'sign_2', 'sign_3'])) $badge = 'info';
                                 elseif ($doc->status === 'completed') $badge = 'success';
+                                elseif ($doc->status === 'awaiting_ack') $badge = 'warning';
+                                elseif ($doc->status === 'acknowledged') $badge = 'success';
                                 elseif ($doc->status === 'rejected_employee') $badge = 'danger';
                             @endphp
                             <tr>
@@ -96,6 +104,15 @@
                                     <a href="{{ route('e-sign.preview', $doc->id) }}" class="btn btn-sm btn-soft-primary">
                                         <i class="ri-eye-line me-1"></i>Preview
                                     </a>
+                                    @if($doc->canAcknowledge(Auth::user()->employee_id))
+                                    <form method="POST" action="{{ route('e-sign.acknowledge', $doc->id) }}" style="display:inline;">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-success"
+                                            onclick="return confirm('Konfirmasi bahwa Anda telah membaca surat ini?')">
+                                            <i class="ri-check-line me-1"></i>Baca / Oke
+                                        </button>
+                                    </form>
+                                    @endif
                                 </td>
                             </tr>
                             @endforeach

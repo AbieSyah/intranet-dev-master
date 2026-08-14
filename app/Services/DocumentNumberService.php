@@ -9,27 +9,17 @@ use Illuminate\Support\Facades\DB;
 class DocumentNumberService
 {
     /**
-     * Generate the next document number for a given letter type slug.
+     * Generate nomor surat untuk satu dokumen (saat surat dirilis/dikirim).
      *
-     * Format: {PREFIX}/{TAHUN}/{URUTAN}
-     * Contoh: PKWT/2026/001
+     * Format tetap: {URUTAN}/ASK/HRD/{BULAN}/{TAHUN}
+     * Contoh: 001/ASK/HRD/08/2026
      *
-     * Nomor di-reset setiap tahun. Urutan dihitung per (prefix, tahun).
-     *
-     * @param string $jenisSuratSlug
-     * @return string nomor_surat generated
-     */
-    /**
-     * Generate the next document number for a given letter type slug.
-     *
-     * Format: {PREFIX}/{TAHUN}/{URUTAN}
-     * Contoh: PKWT/2026/001
-     *
-     * Nomor di-reset setiap tahun. Urutan dihitung per (prefix, tahun).
+     * Kode 'ASK' dan 'HRD' di-hardcode. Urutan bersifat GLOBAL (satu urutan
+     * untuk semua jenis surat) dan di-reset setiap tahun (saat tahun berganti).
      *
      * Method ini TIDAK membungkus diri dengan DB::transaction() karena
      * harus dipanggil dari DALAM transaksi yang sudah dibuka oleh pemanggil
-     * (ESignService::storeDraft).
+     * (ESignService).
      *
      * @param string $jenisSuratSlug
      * @return string nomor_surat generated
@@ -38,9 +28,9 @@ class DocumentNumberService
      */
     public function generateNextNumber(string $jenisSuratSlug): string
     {
-        $prefix = $this->getPrefix($jenisSuratSlug);
         $tahun = now()->format('Y');
-        $lockName = 'esign_number_' . $prefix . '_' . $tahun;
+        $bulan = now()->format('m');
+        $lockName = 'esign_number_global_' . $tahun;
 
         // Ambil lock — timeout 10 detik
         $gotLock = DB::select("SELECT GET_LOCK(?, 10) AS locked", [$lockName]);
@@ -48,22 +38,17 @@ class DocumentNumberService
 
         if (!$locked) {
             throw new \RuntimeException(
-                "Gagal mendapatkan lock untuk generate nomor surat: {$prefix}/{$tahun}. " .
+                "Gagal mendapatkan lock untuk generate nomor surat tahun {$tahun}. " .
                 "Silakan coba lagi."
             );
         }
 
         try {
-            // Cari nomor terakhir dengan prefix dan tahun yang sama
-            $lastNumber = $this->getLastSequentialNumber($prefix, $tahun);
+            // Urutan global: 001/ASK/HRD/BULAN/TAHUN, reset tiap tahun
+            $lastSeq = $this->getLastGlobalSequence($tahun);
+            $seq = $lastSeq + 1;
 
-            // Increment
-            $nextNumber = $lastNumber + 1;
-
-            // Format dengan padding 3 digit
-            $nomorSurat = sprintf('%s/%s/%03d', $prefix, $tahun, $nextNumber);
-
-            return $nomorSurat;
+            return sprintf('%03d/ASK/HRD/%s/%s', $seq, $bulan, $tahun);
         } finally {
             // Lepas lock — dijamin jalan walaupun terjadi exception
             DB::statement("SELECT RELEASE_LOCK(?)", [$lockName]);
@@ -115,12 +100,11 @@ class DocumentNumberService
      */
     public function generateNextBatchNumber(string $jenisSuratSlug): string
     {
-        $prefix = $this->getPrefix($jenisSuratSlug);
-        $dept = config('esign.batch_dept_segment', 'HRD');
-        $bulan = now()->format('m');
         $tahun = now()->format('Y');
+        $bulan = now()->format('m');
 
-        $lockName = 'esign_batch_' . $prefix . '_' . $dept . '_' . $bulan . '_' . $tahun;
+        // Gunakan lock & urutan global yang sama dengan surat tunggal
+        $lockName = 'esign_number_global_' . $tahun;
 
         // Ambil lock — timeout 10 detik
         $gotLock = DB::select("SELECT GET_LOCK(?, 10) AS locked", [$lockName]);
@@ -128,31 +112,49 @@ class DocumentNumberService
 
         if (!$locked) {
             throw new \RuntimeException(
-                "Gagal mendapatkan lock untuk generate nomor batch: {$prefix}/{$dept}/{$bulan}/{$tahun}. " .
+                "Gagal mendapatkan lock untuk generate nomor batch tahun {$tahun}. " .
                 "Silakan coba lagi."
             );
         }
 
         try {
-            // Cari batch terakhir dengan prefix+dept+bulan+tahun yang sama
-            $lastBatch = ESignBatch::where('nomor_surat', 'LIKE', "{$prefix}/{$dept}/{$bulan}/{$tahun}/%")
-                ->orderByDesc('nomor_surat')
-                ->lockForUpdate()
-                ->first();
-
-            $lastSeq = 0;
-            if ($lastBatch) {
-                $lastPart = (int) substr(strrchr($lastBatch->nomor_surat, '/') ?: '', 1);
-                $lastSeq = $lastPart;
-            }
-
+            // Urutan global: 001/ASK/HRD/BULAN/TAHUN, reset tiap tahun
+            $lastSeq = $this->getLastGlobalSequence($tahun);
             $seq = $lastSeq + 1;
 
-            return sprintf('%s/%s/%s/%s/%03d', $prefix, $dept, $bulan, $tahun, $seq);
+            return sprintf('%03d/ASK/HRD/%s/%s', $seq, $bulan, $tahun);
         } finally {
             // Lepas lock — dijamin jalan walaupun terjadi exception
             DB::statement("SELECT RELEASE_LOCK(?)", [$lockName]);
         }
+    }
+
+    /**
+     * Cari nomor urut global terakhir untuk suatu tahun pada format 001/ASK/HRD/MM/YYYY.
+     * Urutan dihitung dari baris depan (segmen pertama) nomor surat.
+     * Nomor batch juga ikut dihitung agar satu urutan global untuk semua surat.
+     */
+    public function getLastGlobalSequence(string $tahun): int
+    {
+        $pattern = '%/ASK/HRD/%/' . $tahun;
+
+        $docs = ESign::where('nomor_surat', 'LIKE', $pattern)
+            ->lockForUpdate()
+            ->pluck('nomor_surat');
+
+        $batches = ESignBatch::where('nomor_surat', 'LIKE', $pattern)
+            ->lockForUpdate()
+            ->pluck('nomor_surat');
+
+        $max = 0;
+        foreach ($docs->merge($batches) as $n) {
+            $seq = (int) explode('/', $n)[0];
+            if ($seq > $max) {
+                $max = $seq;
+            }
+        }
+
+        return $max;
     }
 
     /**

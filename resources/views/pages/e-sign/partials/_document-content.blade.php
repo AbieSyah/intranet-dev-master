@@ -90,7 +90,7 @@
     {{-- Signature area --}}
     @if(strpos($doc->content, 'signature-box') === false && strpos($doc->content, 'QR Code') === false)
         @php
-            $activeTemplate = \App\Models\ESignTemplate::where('jenis_surat_slug', $doc->jenis_surat_slug ?? $data['slug'] ?? null)
+            $activeTemplate = $doc->template ?? \App\Models\ESignTemplate::where('jenis_surat_slug', $doc->jenis_surat_slug ?? $data['slug'] ?? null)
                 ->where('is_active', true)
                 ->first();
             $signActive = $activeTemplate ? $activeTemplate->sign_slots : null;

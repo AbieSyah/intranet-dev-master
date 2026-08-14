@@ -63,16 +63,6 @@
                     </div>
 
                     <div class="row mb-3">
-                        <label class="col-md-3 col-form-label">Prefix Nomor Surat <span class="text-danger">*</span></label>
-                        <div class="col-md-9">
-                            <input type="text" name="prefix" class="form-control @error('prefix') is-invalid @enderror"
-                                value="{{ old('prefix') }}" placeholder="Contoh: PKWT" required>
-                            <small class="text-muted">Contoh: <code>PKWT</code> akan menghasilkan nomor surat <code>PKWT/2026/001</code></small>
-                            @error('prefix')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
                         <label class="col-md-3 col-form-label">Deskripsi</label>
                         <div class="col-md-9">
                             <textarea name="description" class="form-control @error('description') is-invalid @enderror"
@@ -131,14 +121,6 @@
                             <label class="form-check-label" for="isActive">Aktif</label>
                         </div>
                         <small class="text-muted">Nonaktifkan jika jenis surat tidak digunakan</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="form-check form-switch">
-                            <input type="checkbox" name="multi_enabled" class="form-check-input" value="1" id="multiEnabled" {{ old('multi_enabled', '1') ? 'checked' : '' }}>
-                            <label class="form-check-label" for="multiEnabled">Aktifkan Multi-Surat</label>
-                        </div>
-                        <small class="text-muted">Izinkan jenis surat ini dikirim ke banyak penerima sekaligus</small>
                     </div>
                 </div>
             </div>

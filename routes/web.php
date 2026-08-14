@@ -486,6 +486,7 @@ Route::group(['middleware' => 'auth'], function () {
             Route::put('/{id}', 'update')->name('e-sign.templates.update');
             Route::delete('/{id}', 'destroy')->name('e-sign.templates.destroy');
             Route::post('/{id}/set-active', 'setActive')->name('e-sign.templates.set-active');
+Route::post('/{id}/deactivate', 'deactivate')->name('e-sign.templates.deactivate');
             Route::get('/{id}/preview', 'preview')->name('e-sign.templates.preview');
         });
 
@@ -527,8 +528,9 @@ Route::group(['middleware' => 'auth'], function () {
         ->controller(\App\Http\Controllers\ESign\ESignController::class)
         ->group(function () {
             Route::get('/index', 'profileIndex')->name('e-sign.profile-index');
-            Route::put('/{esign}/approve', 'approve')->name('e-sign.approve');
-            Route::put('/{esign}/reject', 'reject')->name('e-sign.reject');
+Route::put('/{esign}/approve', 'approve')->name('e-sign.approve');
+    Route::put('/{esign}/reject', 'reject')->name('e-sign.reject');
+    Route::post('/{esign}/acknowledge', 'acknowledge')->name('e-sign.acknowledge');
         });
 
     //administrator

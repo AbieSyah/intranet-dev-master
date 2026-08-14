@@ -214,26 +214,6 @@
 
     {{-- RIGHT: Data Surat Panel (30%) --}}
     <div class="col-xl-4 col-lg-5 side-panel">
-        {{-- Pilih Template --}}
-        @if($templates && $templates->count() > 1)
-        <div class="card mb-3">
-            <div class="card-header">
-                <i class="ri-file-copy-2-line me-1"></i> Pilih Template
-            </div>
-            <div class="card-body">
-                <select class="form-select" id="selectTemplate">
-                    @foreach($templates as $tpl)
-                    <option value="{{ $tpl->id }}"
-                        data-content="{{ base64_encode($tpl->content) }}"
-                        {{ $activeTemplate && $activeTemplate->id === $tpl->id ? 'selected' : '' }}>
-                        {{ $tpl->title }} {{ $tpl->is_active ? '(Aktif)' : '' }}
-                    </option>
-                    @endforeach
-                </select>
-            </div>
-        </div>
-        @endif
-
         <div class="card">
             <div class="card-header">
                 <i class="ri-file-info-line me-1"></i> Data Surat
@@ -264,11 +244,11 @@
                     {{-- Toggle Multisurat --}}
                     <div class="mb-3 p-2 rounded border {{ in_array($mode, ['create','edit-batch']) ? '' : 'bg-light' }}" style="{{ in_array($mode, ['create','edit-batch']) ? 'border-color:#dee2e6;' : '' }}">
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="toggleMultiSurat" @if(($mode === 'create' || $mode === 'edit-batch') && ($type->multi_enabled ?? true)) {{ $mode === 'edit-batch' ? 'checked' : '' }} @else disabled @endif>
+                            <input class="form-check-input" type="checkbox" id="toggleMultiSurat" @if($mode === 'create' || $mode === 'edit-batch') {{ $mode === 'edit-batch' ? 'checked' : '' }} @else disabled @endif>
                             <label class="form-check-label fw-semibold" for="toggleMultiSurat">Multisurat</label>
                         </div>
                         <small class="text-muted d-block mt-1">
-                            {{ ($mode === 'create' || $mode === 'edit-batch') ? ((($type->multi_enabled ?? true)) ? 'Kirim 1 surat ke banyak karyawan sekaligus (tiap karyawan mendapat salinan dengan datanya sendiri).' : 'Jenis surat ini tidak mengaktifkan mode multisurat.') : 'Mode multisurat hanya tersedia saat membuat surat baru.' }}
+                            {{ ($mode === 'create' || $mode === 'edit-batch') ? 'Kirim 1 surat ke banyak karyawan sekaligus (tiap karyawan mendapat salinan dengan datanya sendiri).' : 'Mode multisurat hanya tersedia saat membuat surat baru.' }}
                         </small>
                         <div class="alert alert-info py-2 mt-2 mb-0" id="multiHint" style="{{ $mode === 'edit-batch' ? '' : 'display:none;' }}font-size:12px;">
                             <i class="ri-stack-line me-1"></i>
@@ -674,18 +654,8 @@
         @elseif($activeTemplate && $activeTemplate->content)
         rawContent = {!! json_encode($activeTemplate->content) !!};
         @elseif($templates && $templates->count() > 0)
-        var firstOpt = $('#selectTemplate').length ? $('#selectTemplate').find('option:first') : null;
-        rawContent = firstOpt ? decodeContent(firstOpt.data('content')) : '';
+        rawContent = {!! json_encode($templates->first()->content ?? '') !!};
         @endif
-
-        // Template change
-        $(document).on('change', '#selectTemplate', function() {
-            var opt = $(this).find(':selected');
-            rawContent = decodeContent(opt.data('content'));
-            $('#inputTemplateId').val(opt.val());
-            detectSignFields();
-            renderPreview();
-        });
 
         // Employee change (multi)
         $('#selectEmployee').on('change', function() {
@@ -860,16 +830,6 @@
             safeRenderPreview();
         });
 
-        // Re-generate date fields when template changes
-        $(document).on('change', '#selectTemplate', function() {
-            setTimeout(function() {
-                detectSignFields();
-                generateDateFields();
-                initDatepicker();
-                safeRenderPreview();
-            }, 100);
-        });
-
         // Before submit, save rendered content
         $('#formDraft').on('submit', function(e) {
             var form = this;
@@ -905,7 +865,7 @@
                 recipients.each(function(i) {
                     var empData = getEmployeeDataByIndex(i, '#selectPenerima');
                     var content = applyRecipientPlaceholders(base, empData);
-                    if (content.indexOf('signature-box') === -1) {
+                    if (content.indexOf('esign-signature-area') === -1 && content.indexOf('signature-box') === -1) {
                         content += multiSignAreaHtml(empData, window.multiRecSlot);
                     }
                     $form.append('<input type="hidden" name="recipients[' + submitted + '][employee_id]" value="' + $(this).val() + '">');
@@ -1149,7 +1109,7 @@
             recipients.each(function(i) {
                 var empData = getEmployeeDataByIndex(i, '#selectPenerima');
                 var content = applyRecipientPlaceholders(base, empData);
-                if (content.indexOf('signature-box') === -1) {
+                if (content.indexOf('esign-signature-area') === -1 && content.indexOf('signature-box') === -1) {
                     content += multiSignAreaHtml(empData, window.multiRecSlot);
                 }
                 var page = '<div class="doc-preview-page">' + headerHtml() + content + '</div>';
@@ -1191,7 +1151,7 @@
         content = content.replace(/\{\{sign_employee2\}\}/g, '');
         content = content.replace(/\{\{sign_employee3\}\}/g, '');
 
-        if (content.indexOf('signature-box') === -1 && window.activeSigns && window.activeSigns.length) {
+        if (content.indexOf('esign-signature-area') === -1 && content.indexOf('signature-box') === -1 && window.activeSigns && window.activeSigns.length) {
             content += buildSignAreaHtml();
         }
         var htmlSingle = headerHtml() + content;
@@ -1223,7 +1183,7 @@
 
     // Kotak tanda tangan generik (label + nama + jabatan) — dipakai multi-surat
     function signBoxHtml(label, name, position) {
-        return '<div style="flex:1;text-align:center;">' +
+        return '<div style="width:140px;text-align:center;">' +
             '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#1e293b;">' + label + '</div>' +
             '<div style="width:120px;height:80px;border:2px dashed #adb5bd;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:10px;color:#adb5bd;background:#f8f9fa;">' +
             '<span>QR Code<br>Digital Signature</span></div>' +
@@ -1261,7 +1221,16 @@
     function applyRecipientPlaceholders(content, empData) {
         [['employee_', 1, /^\{\{(?:employee|employee1)_/], ['employee1_', 1, /^\{\{(?:employee|employee1)_/], ['employee2_', 2, /^\{\{employee2_/], ['employee3_', 3, /^\{\{employee3_/]].forEach(function(def) {
             var prefix = def[0], slot = def[1];
-            var data = getSlotData(slot, empData);
+            // Tanpa slot penerima (penerima tidak menandatangani, mis. surat pengumuman):
+            // seluruh placeholder employee = data penerima salinan ini (bukan penandatangan tetap).
+            // Dengan slot penerima: placeholder yang menunjuk slot penerima = data penerima,
+            // slot lain = penandatangan tetap.
+            var data;
+            if (window.multiRecSlot === null || window.multiRecSlot === undefined) {
+                data = empData || null;
+            } else {
+                data = getSlotData(slot, empData);
+            }
             var name = data ? (data.fullname || data.name || '_______________') : '_______________';
             var nameKey = prefix === 'employee_' ? 'employee_name' : prefix + 'name';
             content = content.replace(new RegExp('\\{\\{' + nameKey + '\\}\\}', 'g'), name);
@@ -1277,11 +1246,11 @@
     function multiSignAreaHtml(empData, recSlot) {
         var active = window.activeSigns || [];
         function cell(slot) {
-            if (active.indexOf(slot) === -1) return '';
+            if (active.indexOf(slot) === -1) return '<div style="flex:1;"></div>';
             var data = getSlotData(slot, empData);
             var name = data ? (data.fullname || data.name || '') : '';
             var pos = data ? (data.position || '') : '';
-            return signBoxHtml('Sign ' + slot, name, pos);
+            return '<div style="flex:1;display:flex;justify-content:center;">' + signBoxHtml('Sign ' + slot, name, pos) + '</div>';
         }
         return '<div class="esign-signature-area" style="display:flex;align-items:flex-start;justify-content:space-between;margin-top:18px;page-break-inside:avoid;">' +
             cell(2) + cell(3) + cell(1) +
@@ -1328,16 +1297,11 @@
             var empSign = getSignEmployeeData(idx);
             var displayName = empSign ? empSign.name : '_______________';
             var displayPosition = empSign ? empSign.position : '_______________';
-            return '<div style="flex:1;text-align:center;">' +
-                '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#1e293b;">' + label + '</div>' +
-                '<div style="width:120px;height:80px;border:2px dashed #adb5bd;border-radius:8px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:10px;color:#adb5bd;background:#f8f9fa;">' +
-                '<span>QR Code<br>Digital Signature</span></div>' +
-                '<div style="font-size:12px;font-weight:600;color:#212529;margin-bottom:2px;">' + displayName + '</div>' +
-                '<div style="font-size:11px;color:#6c757d;">' + displayPosition + '</div></div>';
+            return signBoxHtml(label, displayName, displayPosition);
         }
         function cell(sign) {
-            if (active.indexOf(sign) === -1) return '';
-            return box('Sign ' + sign, sign);
+            if (active.indexOf(sign) === -1) return '<div style="flex:1;"></div>';
+            return '<div style="flex:1;display:flex;justify-content:center;">' + box('Sign ' + sign, sign) + '</div>';
         }
         return '<div class="esign-signature-area" style="display:flex;align-items:flex-start;justify-content:space-between;margin-top:32px;page-break-inside:avoid;">' +
             cell(2) + cell(3) + cell(1) + '</div>';
@@ -1394,6 +1358,23 @@
         var allPages = [firstPage];
         var pageIndex = 0;
 
+        // Ukur tinggi ISI sebenarnya dari sebuah halaman (bukan scrollHeight).
+        // scrollHeight selalu di-klamp ke min-height kertas (297mm), sehingga tidak
+        // cocok untuk mengecek apakah area tanda tangan masih muat di halaman.
+        function contentHeight(page) {
+            var baseTop = page.getBoundingClientRect().top;
+            var maxBottom = 0;
+            var kids = page.children;
+            for (var i = 0; i < kids.length; i++) {
+                var el = kids[i];
+                var r = el.getBoundingClientRect();
+                var cs = window.getComputedStyle(el);
+                var bottom = r.bottom + parseFloat(cs.marginBottom || 0);
+                if (bottom - baseTop > maxBottom) maxBottom = bottom - baseTop;
+            }
+            return maxBottom;
+        }
+
         function makeNextPage(currentPage) {
             var np = document.createElement('div');
             np.className = 'doc-preview-page';
@@ -1412,7 +1393,7 @@
             var currentPage = allPages[pageIndex];
             var safety = 0;
 
-            while (currentPage.scrollHeight > maxH + 5 && safety < 50) {
+            while (contentHeight(currentPage) > maxH + 5 && safety < 50) {
                 safety++;
                 var children = currentPage.children;
                 if (children.length <= 1) break; // sisakan minimal 1 elemen (mis. hanya kop)
@@ -1435,7 +1416,7 @@
         if (sigEl) {
             var lastPage = allPages[allPages.length - 1];
             lastPage.appendChild(sigEl);
-            if (lastPage.scrollHeight > maxH + 5) {
+            if (contentHeight(lastPage) > maxH + 5) {
                 lastPage.removeChild(sigEl);
                 var lastNext = makeNextPage(lastPage);
                 lastNext.appendChild(sigEl);

@@ -110,7 +110,7 @@ class ESignController extends Controller
         $preselectedTypeId = $request->query('letter_type_id');
 
         $letterTypes = LetterType::with(['templates' => function($q) {
-                $q->orderBy('version', 'desc');
+                $q->active()->orderBy('version', 'desc');
             }])
             ->active()
             ->orderBy('name')
@@ -297,24 +297,42 @@ class ESignController extends Controller
         $user = Auth::user();
         $tab = $request->get('tab', 'sign');
 
-        $query = ESign::with('employee.department', 'employee.position')
-            ->where(function ($q) use ($employeeId) {
-                $q->where('employee1_signee_id', $employeeId)
-                  ->orWhere('employee2_signee_id', $employeeId)
-                  ->orWhere('employee3_signee_id', $employeeId);
-            });
+        // Tab "Konfirmasi": surat di mana user adalah PENERIMA (tidak menandatangani)
+        // dan harus/ sudah mengonfirmasi telah membaca.
+        if ($tab === 'confirm') {
+            $query = ESign::with('employee.department', 'employee.position')
+                ->where('employee_id', $employeeId)
+                ->whereIn('status', [
+                    ESign::STATUS_AWAITING_ACK,
+                    ESign::STATUS_ACKNOWLEDGED,
+                ]);
+        } else {
+            $query = ESign::with('employee.department', 'employee.position')
+                ->where(function ($q) use ($employeeId) {
+                    $q->where('employee1_signee_id', $employeeId)
+                      ->orWhere('employee2_signee_id', $employeeId)
+                      ->orWhere('employee3_signee_id', $employeeId)
+                      ->orWhere('employee_id', $employeeId);
+                });
 
-        if ($tab === 'sign') {
-            $query->whereIn('status', [
-                ESign::STATUS_SIGN_1,
-                ESign::STATUS_SIGN_2,
-                ESign::STATUS_SIGN_3,
-            ]);
-        } elseif ($tab === 'done') {
-            $query->whereIn('status', [
-                ESign::STATUS_COMPLETED,
-                ESign::STATUS_REJECTED_EMPLOYEE,
-            ]);
+            if ($tab === 'sign') {
+                $query->whereIn('status', [
+                    ESign::STATUS_SIGN_1,
+                    ESign::STATUS_SIGN_2,
+                    ESign::STATUS_SIGN_3,
+                ]);
+            } elseif ($tab === 'done') {
+                $query->where(function ($q) use ($employeeId) {
+                    $q->whereIn('status', [
+                        ESign::STATUS_COMPLETED,
+                        ESign::STATUS_REJECTED_EMPLOYEE,
+                    ])->orWhere(function ($q2) use ($employeeId) {
+                        // Surat yang user terima sebagai penerima & sudah dikonfirmasi.
+                        $q2->where('employee_id', $employeeId)
+                           ->where('status', ESign::STATUS_ACKNOWLEDGED);
+                    });
+                });
+            }
         }
 
         $documents = $query->orderBy('created_at', 'desc')->paginate(25)->appends(['tab' => $tab]);
@@ -334,6 +352,8 @@ class ESignController extends Controller
             'sign_2' => 'Menunggu Sign 2',
             'sign_3' => 'Menunggu Sign 3',
             'completed' => 'Completed',
+            'awaiting_ack' => 'Menunggu Konfirmasi',
+            'acknowledged' => 'Dikonfirmasi',
             'rejected_employee' => 'Rejected',
         ];
 
@@ -606,6 +626,19 @@ class ESignController extends Controller
     }
 
     /**
+     * Penerima (yang tidak menandatangani) mengonfirmasi telah membaca surat.
+     */
+    public function acknowledge(ESign $esign, ESignService $esignService)
+    {
+        $employeeId = Auth::user()->employee_id;
+        $esignService->acknowledgeByRecipient($esign, $employeeId);
+
+        return redirect()
+            ->route('e-sign.profile-index', ['tab' => 'confirm'])
+            ->with('success', 'Terima kasih. Surat telah dikonfirmasi sebagai sudah dibaca.');
+    }
+
+    /**
      * Generate and download PDF for a signed/approved document.
      * Uses the same Blade template as Preview (single source of truth).
      */
@@ -637,7 +670,8 @@ class ESignController extends Controller
         $marginRight = $template->page_margin_right ?? 25;
         $pageSize = $template->page_size ?? 'A4';
 
-        $filename = str_replace('/', '-', $doc->nomor_surat) . '.pdf';
+        $baseName = $doc->nomor_surat ?? ($doc->jenis_surat_label ?? 'Surat-' . $doc->id);
+        $filename = preg_replace('/[^\w\-.]+/', '-', $baseName) . '.pdf';
 
         $pdf = Pdf::loadView('pages.e-sign.partials._document-pdf', compact('doc', 'data'))
             ->setPaper($pageSize, 'portrait')

@@ -66,7 +66,30 @@ class ESignTemplate extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
+    public function documents()
+    {
+        return $this->hasMany(ESign::class, 'template_id');
+    }
+
+    public function batches()
+    {
+        return $this->hasMany(ESignBatch::class, 'template_id');
+    }
+
     // ========== ACCESSORS ==========
+
+    public function getIssuedLetterCountAttribute(): int
+    {
+        if (array_key_exists('documents_count', $this->attributes) && array_key_exists('batches_count', $this->attributes)) {
+            return (int)$this->attributes['documents_count'] + (int)$this->attributes['batches_count'];
+        }
+        return $this->documents()->count() + $this->batches()->count();
+    }
+
+    public function getHasIssuedLettersAttribute(): bool
+    {
+        return $this->issued_letter_count > 0;
+    }
 
     public function getJenisSuratLabelAttribute()
     {

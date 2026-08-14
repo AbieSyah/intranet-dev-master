@@ -113,6 +113,18 @@ class TemplateController extends Controller
     }
 
     /**
+     * Nonaktifkan template (is_active = false).
+     */
+    public function deactivate(int $id)
+    {
+        $template = $this->templateService->deactivate($id);
+
+        return redirect()
+            ->route('e-sign.templates', ['letter_type_id' => $template->letter_type_id])
+            ->with('success', 'Template berhasil dinonaktifkan.');
+    }
+
+    /**
      * Preview template content.
      */
     public function preview(int $id)

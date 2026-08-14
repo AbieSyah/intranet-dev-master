@@ -58,6 +58,10 @@
         font-family: Calibri, Arial, sans-serif !important;
         font-size: 12pt !important;
         line-height: 1.5 !important;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='620' height='46'><line x1='0' y1='23' x2='620' y2='23' stroke='%23dc3545' stroke-width='1.4' stroke-dasharray='7 6' opacity='0.65'/><rect x='6' y='5' width='120' height='17' rx='3' fill='%23fff3cd' stroke='%23dc3545' stroke-opacity='0.7'/><text x='66' y='18' font-family='Calibri,Arial,sans-serif' font-size='11' fill='%23b02a37' text-anchor='middle'>Batas Halaman 1</text></svg>") !important;
+        background-repeat: no-repeat !important;
+        background-position: 0 277mm !important;
+        background-attachment: local !important;
     }
 
     /* Paragraph spacing untuk surat resmi — seperti Word */
@@ -354,7 +358,7 @@
 <form action="{{ route('e-sign.templates.store') }}" method="POST" id="formTemplate">
     @csrf
     <input type="hidden" name="template_type" value="editor">
-    <input type="hidden" name="sign_1" id="inputSign1" value="1">
+    <input type="hidden" name="sign_1" id="inputSign1" value="0">
     <input type="hidden" name="sign_2" id="inputSign2" value="0">
     <input type="hidden" name="sign_3" id="inputSign3" value="0">
     <input type="hidden" name="sign_1_is_recipient" id="inputRecipient1" value="0">
@@ -856,6 +860,22 @@
         var allPages = [wrapper];
         var pageIndex = 0;
 
+        // Ukur tinggi ISI sebenarnya (bukan scrollHeight — selalu di-klamp ke
+        // min-height 297mm sehingga tidak cocok untuk cek area tanda tangan).
+        function contentHeight(page) {
+            var baseTop = page.getBoundingClientRect().top;
+            var maxBottom = 0;
+            var kids = page.children;
+            for (var i = 0; i < kids.length; i++) {
+                var el = kids[i];
+                var r = el.getBoundingClientRect();
+                var cs = window.getComputedStyle(el);
+                var bottom = r.bottom + parseFloat(cs.marginBottom || 0);
+                if (bottom - baseTop > maxBottom) maxBottom = bottom - baseTop;
+            }
+            return maxBottom;
+        }
+
         var nodes = Array.prototype.slice.call(source.childNodes);
         for (var i = 0; i < nodes.length; i++) wrapper.appendChild(nodes[i]);
 
@@ -877,7 +897,7 @@
         while (pageIndex < allPages.length) {
             var cur = allPages[pageIndex];
             var safety = 0;
-            while (cur.scrollHeight > maxH + 5 && safety < 50) {
+            while (contentHeight(cur) > maxH + 5 && safety < 50) {
                 safety++;
                 var kids = cur.children;
                 if (kids.length <= 1) break;
@@ -894,7 +914,7 @@
         if (sig) {
             var lastPage = allPages[allPages.length - 1];
             lastPage.appendChild(sig);
-            if (lastPage.scrollHeight > maxH + 5) {
+            if (contentHeight(lastPage) > maxH + 5) {
                 lastPage.removeChild(sig);
                 var fresh = makeNext(lastPage);
                 fresh.appendChild(sig);

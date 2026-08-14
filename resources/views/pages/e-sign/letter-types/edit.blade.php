@@ -113,14 +113,6 @@
                                 </div>
                             </div>
                             <div class="row mb-3">
-                                <label class="col-md-3 col-form-label">Prefix Nomor Surat <span class="text-danger">*</span></label>
-                                <div class="col-md-9">
-                                    <input type="text" name="prefix" class="form-control @error('prefix') is-invalid @enderror" value="{{ old('prefix', $type->prefix) }}" placeholder="Contoh: PKWT" required>
-                                    <small class="text-muted">Contoh: PKWT/HRD/2026/001</small>
-                                    @error('prefix')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                                </div>
-                            </div>
-                            <div class="row mb-3">
                                 <label class="col-md-3 col-form-label">Deskripsi</label>
                                 <div class="col-md-9">
                                     <textarea name="description" class="form-control @error('description') is-invalid @enderror" rows="3">{{ old('description', $type->description) }}</textarea>
@@ -172,13 +164,6 @@
                                     <input type="checkbox" name="is_active" class="form-check-input" value="1" id="isActive" {{ old('is_active', $type->is_active) ? 'checked' : '' }}>
                                     <label class="form-check-label" for="isActive">Aktif</label>
                                 </div>
-                            </div>
-                            <div class="mb-3">
-                                <div class="form-check form-switch">
-                                    <input type="checkbox" name="multi_enabled" class="form-check-input" value="1" id="multiEnabled" {{ old('multi_enabled', $type->multi_enabled) ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="multiEnabled">Aktifkan Multi-Surat</label>
-                                </div>
-                                <small class="text-muted">Izinkan jenis surat ini dikirim ke banyak penerima sekaligus</small>
                             </div>
                         </div>
                     </div>

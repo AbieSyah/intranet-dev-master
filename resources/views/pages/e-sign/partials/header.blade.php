@@ -19,4 +19,3 @@
 </div>
 
 <div class="doc-title">{{ $data['title'] }}</div>
-<div class="doc-number">Nomor: {{ $doc->nomor_surat ?? $data['number'] }}</div>

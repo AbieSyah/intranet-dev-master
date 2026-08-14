@@ -111,6 +111,14 @@
             <div class="d-flex align-items-center gap-2">
                 @if($template->is_active)
                 <span class="badge bg-success">Aktif</span>
+                <button type="button" class="btn btn-sm btn-outline-warning btn-deactivate-template" data-id="{{ $template->id }}" data-title="{{ $template->title }}">
+                    <i class="ri-pause-circle-line" title="Nonaktifkan"></i>
+                </button>
+                @endif
+                @if($template->has_issued_letters)
+                <span class="badge bg-light text-muted border" title="Tidak bisa dihapus karena sudah menerbitkan surat">
+                    <i class="ri-lock-line me-1"></i>dipakai {{ $template->issued_letter_count }} surat
+                </span>
                 @endif
                 <button type="button" class="btn btn-sm btn-outline-info btn-preview-template" data-id="{{ $template->id }}" data-title="{{ $template->title }}">
                     <i class="ri-eye-line"></i> Preview
@@ -122,10 +130,12 @@
                 <button type="button" class="btn btn-sm btn-outline-success btn-set-active" data-id="{{ $template->id }}">
                     <i class="ri-check-double-line"></i>
                 </button>
+                @if(!$template->has_issued_letters)
                 <button type="button" class="btn btn-sm btn-outline-danger btn-delete-template"
                     data-id="{{ $template->id }}" data-title="{{ $template->title }}">
                     <i class="ri-delete-bin-line"></i>
                 </button>
+                @endif
                 @endif
             </div>
         </div>
@@ -428,6 +438,47 @@
                         },
                         error: function(xhr) {
                             let msg = 'Gagal mengaktifkan template.';
+                            if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                            Swal.fire({ icon: 'error', title: 'Gagal!', text: msg });
+                        }
+                    });
+                }
+            });
+        });
+
+        // Nonaktifkan template
+        $('.btn-deactivate-template').on('click', function() {
+            const id = $(this).data('id');
+            const title = $(this).data('title');
+            Swal.fire({
+                title: 'Nonaktifkan Template?',
+                text: 'Template "' + title + '" akan dinonaktifkan.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f7b84b',
+                confirmButtonText: 'Ya, Nonaktifkan',
+                cancelButtonText: 'Batal'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '{{ url("e-sign/templates") }}/' + id + '/deactivate',
+                        type: 'POST',
+                        data: {
+                            _token: $('meta[name="csrf-token"]').attr('content')
+                        },
+                        success: function(res) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Berhasil!',
+                                text: 'Template berhasil dinonaktifkan.',
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                location.reload();
+                            });
+                        },
+                        error: function(xhr) {
+                            let msg = 'Gagal menonaktifkan template.';
                             if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
                             Swal.fire({ icon: 'error', title: 'Gagal!', text: msg });
                         }

@@ -146,11 +146,13 @@
                                 'Surat Peringatan' => 'surat-peringatan',
                             ];
                             $slug = $slugMap[$doc['jenis_surat']] ?? 'pkwt';
-                            $badge = 'secondary';
-                            if ($doc['status'] === 'Completed') $badge = 'success';
-                            elseif (in_array($doc['status'], ['Menunggu Sign 1', 'Menunggu Sign 2', 'Menunggu Sign 3'])) $badge = 'info';
-                            elseif ($doc['status'] === 'Draft') $badge = 'warning';
-                            elseif ($doc['status'] === 'Rejected') $badge = 'danger';
+$badge = 'secondary';
+                                if ($doc['status'] === 'Completed') $badge = 'success';
+                                elseif ($doc['status'] === 'Dikonfirmasi') $badge = 'success';
+                                elseif ($doc['status'] === 'Menunggu Konfirmasi') $badge = 'warning';
+                                elseif (in_array($doc['status'], ['Menunggu Sign 1', 'Menunggu Sign 2', 'Menunggu Sign 3'])) $badge = 'info';
+                                elseif ($doc['status'] === 'Draft') $badge = 'warning';
+                                elseif ($doc['status'] === 'Rejected') $badge = 'danger';
                             $rowId = 'detail-' . $doc['id'];
                         @endphp
                         <tr class="main-row" data-target="{{ $rowId }}">

@@ -15,8 +15,8 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 <style>
     @page {
-        margin-top: 6.2cm;
-        margin-bottom: 2.5cm;
+        margin-top: 5.0cm;
+        margin-bottom: 2.2cm;
         margin-left: 2cm;
         margin-right: 2cm;
     }
@@ -34,7 +34,7 @@
     /* Kop surat — berulang di SETIAP halaman (position:fixed seperti footer) */
     .pdf-repeating-header {
         position: fixed;
-        top: -6.2cm;
+        top: -5.0cm;
         left: 2cm;
         right: 2cm;
         text-align: center;
@@ -141,7 +141,7 @@
     /* Footer fixed di底部 setiap halaman — ditempatkan di area margin bawah */
     .pdf-footer {
         position: fixed;
-        bottom: -2.2cm;
+        bottom: -1.9cm;
         left: 2cm;
         right: 2cm;
         text-align: center;
@@ -161,6 +161,27 @@
     }
     .doc-content {
         page-break-inside: auto;
+    }
+
+    /* DomPDF tidak mendukung flexbox dengan baik. Ubah area tanda tangan
+       yang tertanam di konten (layout flex editor) menjadi tabel agar
+       tampil rapi & tidak terlempar ke halaman berikutnya. */
+    .esign-signature-area {
+        display: table !important;
+        width: 100% !important;
+        table-layout: fixed !important;
+        page-break-inside: avoid !important;
+    }
+    .esign-signature-area > div {
+        display: table-cell !important;
+        width: 33.33% !important;
+        vertical-align: top !important;
+    }
+    .esign-signature-area > div:first-child {
+        text-align: center !important;
+    }
+    .esign-signature-area > div:first-child > div {
+        display: inline-block !important;
     }
 </style>
 </head>
@@ -206,7 +227,7 @@
             $signee3 = $doc->employee3_signee_id ? \App\Models\Employee::with('position')->find($doc->employee3_signee_id) : null;
 
             // Hanya tampilkan slot yang aktif di template (default: semua)
-            $activeTemplate = \App\Models\ESignTemplate::where('jenis_surat_slug', $doc->jenis_surat_slug ?? $data['slug'] ?? null)
+            $activeTemplate = $doc->template ?? \App\Models\ESignTemplate::where('jenis_surat_slug', $doc->jenis_surat_slug ?? $data['slug'] ?? null)
                 ->where('is_active', true)
                 ->first();
             $signActive = $activeTemplate ? $activeTemplate->sign_slots : [1, 2, 3];

@@ -18,7 +18,7 @@ class UpdateLetterTypeRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:100'],
-            'prefix' => ['required', 'string', 'max:20'],
+            'prefix' => ['nullable', 'string', 'max:20'],
             'description' => ['nullable', 'string', 'max:500'],
             'icon' => ['nullable', 'string', 'max:50'],
             'color' => ['nullable', 'string', 'max:20'],
@@ -31,7 +31,6 @@ class UpdateLetterTypeRequest extends FormRequest
     {
         return [
             'name.required' => 'Nama jenis surat wajib diisi.',
-            'prefix.required' => 'Prefix wajib diisi.',
         ];
     }
 }

@@ -36,7 +36,7 @@
             overflow: hidden;
         }
         .doc-preview-page .page-inner {
-            height: 100%;
+            height: auto;
             overflow: hidden;
         }
         .doc-preview-page .page-number {
@@ -246,6 +246,28 @@
                             <i class="ri-check-double-line me-1"></i> Tanda Tangan
                         </button>
                     </form>
+                    @endif
+
+                    @if($doc->canAcknowledge($employeeId))
+                    {{-- Penerima (tidak menandatangani): konfirmasi telah membaca --}}
+                    <form method="POST" action="{{ route('e-sign.acknowledge', $doc->id) }}" style="display:inline;">
+                        @csrf
+                        <button type="submit" class="btn btn-success w-100 mb-2" onclick="return confirm('Konfirmasi bahwa Anda telah membaca surat ini?')">
+                            <i class="ri-mail-check-line me-1"></i> Baca / Oke
+                        </button>
+                    </form>
+                    @endif
+
+                    @if($doc->isAwaitingAck())
+                    <div class="alert alert-warning py-2 mb-3 small">
+                        <i class="ri-time-line me-1"></i> Surat telah ditandatangani. Menunggu konfirmasi penerima telah membaca.
+                    </div>
+                    @endif
+                    @if($doc->isAcknowledged())
+                    <div class="alert alert-success py-2 mb-3 small">
+                        <i class="ri-check-double-line me-1"></i> Dikonfirmasi telah dibaca oleh penerima pada
+                        {{ $doc->recipient_acknowledged_at ? \Carbon\Carbon::parse($doc->recipient_acknowledged_at)->format('d/m/Y H:i') : '-' }}.
+                    </div>
                     @endif
 
                     @if($doc->isDraft())

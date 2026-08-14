@@ -21,6 +21,7 @@ class ESign extends Model
         'employee1_signed_at',
         'employee2_signed_at',
         'employee3_signed_at',
+        'recipient_acknowledged_at',
         'letter_type_id',
         'template_id',
         'batch_id',
@@ -49,6 +50,7 @@ class ESign extends Model
         'upload_date',
         'tanggal_mulai',
         'tanggal_akhir',
+        'recipient_acknowledged_at',
         'created_at',
         'updated_at',
         'deleted_at',
@@ -59,6 +61,7 @@ class ESign extends Model
         'upload_date' => 'datetime',
         'tanggal_mulai' => 'date',
         'tanggal_akhir' => 'date',
+        'recipient_acknowledged_at' => 'datetime',
     ];
 
     // ========== RELATIONSHIPS ==========
@@ -111,6 +114,8 @@ class ESign extends Model
     const STATUS_SIGN_3 = 'sign_3';
     const STATUS_COMPLETED = 'completed';
     const STATUS_REJECTED_EMPLOYEE = 'rejected_employee';
+    const STATUS_AWAITING_ACK = 'awaiting_ack';
+    const STATUS_ACKNOWLEDGED = 'acknowledged';
 
     const DOCUMENT_TYPE_CONTRACT = 'contract';
     const DOCUMENT_TYPE_APPROVAL = 'approval';
@@ -124,7 +129,9 @@ class ESign extends Model
         self::STATUS_SIGN_1 => 'Menunggu Sign 1',
         self::STATUS_SIGN_2 => 'Menunggu Sign 2',
         self::STATUS_SIGN_3 => 'Menunggu Sign 3',
+        self::STATUS_AWAITING_ACK => 'Menunggu Konfirmasi',
         self::STATUS_COMPLETED => 'Completed',
+        self::STATUS_ACKNOWLEDGED => 'Dikonfirmasi',
         self::STATUS_REJECTED_EMPLOYEE => 'Ditolak',
     ];
 
@@ -155,7 +162,9 @@ class ESign extends Model
             self::STATUS_SIGN_1 => 'info',
             self::STATUS_SIGN_2 => 'info',
             self::STATUS_SIGN_3 => 'info',
+            self::STATUS_AWAITING_ACK => 'warning',
             self::STATUS_COMPLETED => 'success',
+            self::STATUS_ACKNOWLEDGED => 'success',
             self::STATUS_REJECTED_EMPLOYEE => 'danger',
         ];
 
@@ -404,6 +413,49 @@ class ESign extends Model
     }
 
     /**
+     * Check if this document is a "recipient-only" letter: has a recipient
+     * (employee_id) that is NOT one of the signers. Such letters go through
+     * the acknowledgment flow instead of being signed by the recipient.
+     */
+    public function hasRecipientOnly(): bool
+    {
+        if (!$this->employee_id) {
+            return false;
+        }
+        return !in_array($this->employee_id, [
+            $this->employee1_signee_id,
+            $this->employee2_signee_id,
+            $this->employee3_signee_id,
+        ], true);
+    }
+
+    /**
+     * Check if the document is waiting for the recipient to confirm reading.
+     */
+    public function isAwaitingAck(): bool
+    {
+        return $this->status === self::STATUS_AWAITING_ACK;
+    }
+
+    /**
+     * Check if the recipient has acknowledged the document.
+     */
+    public function isAcknowledged(): bool
+    {
+        return $this->status === self::STATUS_ACKNOWLEDGED;
+    }
+
+    /**
+     * Check if the given employee may acknowledge (confirm reading) this document.
+     */
+    public function canAcknowledge(int $employeeId): bool
+    {
+        return $this->isAwaitingAck()
+            && $this->employee_id !== null
+            && $this->employee_id === $employeeId;
+    }
+
+    /**
      * Check if document is waiting for any employee sign
      */
     public function isWaitingSign()
@@ -429,7 +481,9 @@ class ESign extends Model
             self::STATUS_SIGN_1 => 'info',
             self::STATUS_SIGN_2 => 'info',
             self::STATUS_SIGN_3 => 'info',
+            self::STATUS_AWAITING_ACK => 'warning',
             self::STATUS_COMPLETED => 'success',
+            self::STATUS_ACKNOWLEDGED => 'success',
             self::STATUS_REJECTED_EMPLOYEE => 'danger',
         ];
         return $colors[$status] ?? 'secondary';
